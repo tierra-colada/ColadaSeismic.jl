@@ -1,0 +1,4 @@
+name = "ColadaSeismic"
+uuid = "a2807464-932b-4942-83bf-1d6f4ce10d11"
+authors = ["kerim khemraev"]
+version = "0.1.0"
