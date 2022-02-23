@@ -17,13 +17,13 @@ function prepare_JUDI_geometry_2D(
   
   usrc_x = h5geom.getPKeyValues(h5opt.src_xkey, h5geom.getLengthUnits(), "m")
   if isempty(usrc_x)
-    @error "Unable to get src_xkey PKey values. Probably $h5opt.src_xkey is sorting"
+    @error "Unable to get src_xkey PKey values. Probably $(h5opt.src_xkey) is sorting"
     return
   end
 
   usrc_x = usrc_x[(usrc_x .>= h5opt.src_xkey_min) .& (usrc_x .<= h5opt.src_xkey_max)] # brackets are necessary
   if isempty(usrc_x)
-    @error "Search $h5opt.src_xkey >= $h5opt.src_xkey_min and $h5opt.src_xkey >= $h5opt.src_xkey_max resulted in an empty array"
+    @error "Search $(h5opt.src_xkey) >= $(h5opt.src_xkey_min) and $(h5opt.src_xkey) >= $(h5opt.src_xkey_max) resulted in an empty array"
     return
   end
   
@@ -85,7 +85,7 @@ function prepare_JUDI_geometry_3D(
   maxlist = [h5opt.src_xkey_max, h5opt.src_ykey_max]
   ~, src_xy, ~ = h5geom.getSortedData(keylist, minlist, maxlist, 0, 0, true, "", "m", true)
   if isempty(src_xy)
-    @error "Unable to get sorted src_x src_y headers. Probably $h5opt.src_xkey is missing"
+    @error "Unable to get sorted src_x src_y headers. Probably $(h5opt.src_xkey) is missing"
     return
   end
 

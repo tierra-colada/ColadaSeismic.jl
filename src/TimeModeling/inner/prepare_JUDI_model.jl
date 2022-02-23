@@ -17,7 +17,7 @@ function prepare_JUDI_model_2D(
   
   model_x = h5model.getTraceHeader(h5opt.model_xkey, 0, typemax(Int), h5model.getLengthUnits(), "m")
   if length(model_x) < 2
-    @error "$h5opt.model_xkey can't have less than 2 points"
+    @error "$(h5opt.model_xkey) can't have less than 2 points"
     return
   end
   
@@ -56,7 +56,7 @@ function prepare_JUDI_model_3D(
   keylist = [h5opt.model_xkey, h5opt.model_ykey]
   xy = h5model.getXYTraceHeaders(keylist, ind, "m", true)
   if isempty(xy)
-    @error "Unable to read $h5opt.model_xkey and $h5opt.model_ykey trace headers. Probably length units incorrect/missing"
+    @error "Unable to read $(h5opt.model_xkey) and $(h5opt.model_ykey) trace headers. Probably length units incorrect/missing"
     return
   end
 

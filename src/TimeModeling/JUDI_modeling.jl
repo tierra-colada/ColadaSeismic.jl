@@ -46,7 +46,7 @@ function h5wavemodeling2d(
 
   usrc_x = h5geom.getPKeyValues(h5geom_opt.src_xkey, h5geom.getLengthUnits(), "m")
   if isempty(usrc_x)
-    @error "No $h5geom_opt.src_xkey sorting"
+    @error "No $(h5geom_opt.src_xkey) sorting"
     return
   end
 
@@ -167,7 +167,7 @@ function h5wavemodeling3d(
   maxlist = [Inf, Inf]
   ~, src_xy, ~ = h5geom.getSortedData(keylist, minlist, maxlist, 0, 0, true, "", "m", true)
   if isempty(src_xy)
-    @error "Unable to get sorted src_x src_y headers. Probably $h5geom_opt.src_xkey is missing"
+    @error "Unable to get sorted src_x src_y headers. Probably $(h5geom_opt.src_xkey) is missing"
     return
   end
 
