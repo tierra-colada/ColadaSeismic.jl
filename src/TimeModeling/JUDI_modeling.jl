@@ -1,16 +1,15 @@
-include("prepare_JUDI_model.jl")
-include("prepare_JUDI_geometry.jl")
 
-# frq in KHz
+# src_frq in KHz
 function h5wavemodeling2d(
   h5model::PyCall.PyObject, h5geom::PyCall.PyObject;
+  h5model_opt::H5ModelOptions=H5ModelOptions(),
+  h5geom_opt::H5GeomOptions=H5GeomOptions(),
   opt::JUDI.Options=nothing,
-  model_xkey::String="CDP_X",
-  src_xkey::String="SRCX",
-  src_zkey::String="SES",
-  rec_xkey::String="GRPX",
-  rec_zkey::String="RGE",
-  frq::Float32=0.01f0)
+  src_frq::Float32=0.01f0,
+  src_dt::Number=2,
+  src_nt::Integer=50,
+  rec_dt::Number=2,
+  rec_nt::Integer=50)
 
   # pylogging = pyimport("logging")
   h5gt = pyimport("h5gtpy._h5gt")
@@ -29,28 +28,33 @@ function h5wavemodeling2d(
     return
   end
 
-  model = prepare_JUDI_model_2D(h5model, model_xkey=model_xkey)
+  if src_frq < 0
+    @error "Source frequency is negative"
+    return
+  end
+
+  if src_dt <= 0 || src_nt < 1 || rec_dt <= 0 || rec_nt < 1
+    @error "Source/Receiver timings negative"
+    return
+  end
+
+  model = prepare_JUDI_model_2D(h5model, h5opt=h5model_opt)
   if isnothing(model)
     @error "Unable to prepare JUDI Model"
     return
   end
 
-  usrc_x = h5geom.getPKeyValues(src_xkey, h5geom.getLengthUnits(), "m")
+  usrc_x = h5geom.getPKeyValues(h5geom_opt.src_xkey, h5geom.getLengthUnits(), "m")
   if isempty(usrc_x)
-    @error "No $src_xkey sorting"
+    @error "No $h5geom_opt.src_xkey sorting"
     return
   end
 
   # receiver sampling and recording time (JUDI works with positive values)
-  timeR = abs(h5geom.getLastSample(0, "ms"))   # receiver recording time [ms]
-  dtR = abs(h5geom.getSampRate("ms"))          # receiver sampling interval [ms]
-
-  # source sampling and number of time steps
-  timeS = timeR  # ms
-  dtS = dtR   # ms
+  src_t1 = (src_nt-1)*src_dt
 
   # setup wavelet
-  wavelet = ricker_wavelet(timeS, dtS, frq)
+  wavelet = ricker_wavelet(src_t1, src_dt, src_frq)
 
   nsrc = length(usrc_x)
   progressDialog = nothing
@@ -64,14 +68,14 @@ function h5wavemodeling2d(
       slicer.app.processEvents()
     end
 
+    h5geom_opt.src_xkey_min = usrc_x[i]
+    h5geom_opt.src_xkey_max = usrc_x[i]
     srcGeometry, recGeometry, indCellVec = prepare_JUDI_geometry_2D(
-      h5geom,
-      src_xkey_min=usrc_x[i],
-      src_xkey_max=usrc_x[i],
-      src_xkey=src_xkey,
-      src_zkey=src_zkey,
-      rec_xkey=rec_xkey,
-      rec_zkey=rec_zkey)
+      h5geom, h5opt=h5geom_opt,
+      src_dt=src_dt,
+      src_nt=src_nt,
+      rec_dt=rec_dt,
+      rec_nt=rec_nt)
 
     if isnothing(srcGeometry) || isnothing(recGeometry) || isnothing(indCellVec)
       @error "Unable to prepare Source and Receiver JUDI Geometry"
@@ -91,8 +95,6 @@ function h5wavemodeling2d(
     F = judiModeling(info, model; options=opt)
     Ps = judiProjection(info, srcGeometry)
 
-    pp = Pr*F*adjoint(Ps)
-    pq = pp*q
     # Nonlinear modeling
     dobs = Pr*F*adjoint(Ps)*q
     # qad = Ps*adjoint(F)*adjoint(Pr)*dobs
@@ -115,19 +117,17 @@ end
 
 
 
-# frq in KHz
+# src_frq in KHz
 function h5wavemodeling3d(
   h5model::PyCall.PyObject, h5geom::PyCall.PyObject;
+  h5model_opt::H5ModelOptions=H5ModelOptions(),
+  h5geom_opt::H5GeomOptions=H5GeomOptions(),
   opt::JUDI.Options=nothing,
-  model_xkey::String="CDP_X",
-  model_ykey::String="CDP_Y",
-  src_xkey::String="SRCX",
-  src_ykey::String="SRCY",
-  src_zkey::String="SES",
-  rec_xkey::String="GRPX",
-  rec_ykey::String="GRPY",
-  rec_zkey::String="RGE",
-  frq::Float32=0.01f0)
+  src_frq::Float32=0.01f0,
+  src_dt::Number=2,
+  src_nt::Integer=50,
+  rec_dt::Number=2,
+  rec_nt::Integer=50)
 
   # pylogging = pyimport("logging")
   h5gt = pyimport("h5gtpy._h5gt")
@@ -146,33 +146,38 @@ function h5wavemodeling3d(
     return
   end
 
-  model, orientation = prepare_JUDI_model_3D(h5model, model_xkey=model_xkey, model_ykey=model_ykey)
+  if src_frq < 0
+    @error "Source frequency is negative"
+    return
+  end
+
+  if src_dt <= 0 || src_nt < 1 || rec_dt <= 0 || rec_nt < 1
+    @error "Source/Receiver timings negative"
+    return
+  end
+
+  model, h5geom_opt.model_orientation = prepare_JUDI_model_3D(h5model, h5opt=h5model_opt)
   if isnothing(model)
     @error "Unable to prepare JUDI Model"
     return
   end
 
-  keylist = [src_xkey, src_ykey]
+  keylist = [h5geom_opt.src_xkey, h5geom_opt.src_ykey]
   minlist = [-Inf, -Inf]
   maxlist = [Inf, Inf]
   ~, src_xy, ~ = h5geom.getSortedData(keylist, minlist, maxlist, 0, 0, true, "", "m", true)
   if isempty(src_xy)
-    @error "Unable to get sorted src_x src_y headers. Probably $src_xkey is missing"
+    @error "Unable to get sorted src_x src_y headers. Probably $h5geom_opt.src_xkey is missing"
     return
   end
 
   ~, usrc_xy, ~ = h5geo.sort_rows_unique(src_xy)
 
   # receiver sampling and recording time (JUDI works with positive values)
-  timeR = abs(h5geom.getLastSample(0, "ms"))   # receiver recording time [ms]
-  dtR = abs(h5geom.getSampRate("ms"))          # receiver sampling interval [ms]
-
-  # source sampling and number of time steps
-  timeS = timeR  # ms
-  dtS = dtR   # ms
+  src_t1 = (src_nt-1)*src_dt
 
   # setup wavelet
-  wavelet = ricker_wavelet(timeS, dtS, frq)
+  wavelet = ricker_wavelet(src_t1, src_dt, src_frq)
 
   nsrc = size(usrc_xy)[1]
   progressDialog = nothing
@@ -186,19 +191,16 @@ function h5wavemodeling3d(
       slicer.app.processEvents()
     end
 
+    h5geom_opt.src_xkey_min = usrc_x[i]
+    h5geom_opt.src_xkey_max = usrc_x[i]
+    h5geom_opt.src_ykey_min = usrc_y[i]
+    h5geom_opt.src_ykey_max = usrc_y[i]
     srcGeometry, recGeometry, indCellVec = prepare_JUDI_geometry_3D(
-      h5geom,
-      src_xkey_min=usrc_xy[i,1],
-      src_xkey_max=usrc_xy[i,1],
-      src_ykey_min=usrc_xy[i,2],
-      src_ykey_max=usrc_xy[i,2],
-      src_xkey=src_xkey,
-      src_ykey=src_ykey,
-      src_zkey=src_zkey,
-      rec_xkey=rec_xkey,
-      rec_ykey=rec_ykey,
-      rec_zkey=rec_zkey,
-      model_orientation = orientation)
+      h5geom, h5opt=h5geom_opt,
+      src_dt=src_dt,
+      src_nt=src_nt,
+      rec_dt=rec_dt,
+      rec_nt=rec_nt)
     if isnothing(srcGeometry) || isnothing(recGeometry) || isnothing(indCellVec)
       @error "Unable to prepare Source and Receiver JUDI Geometry"
       return
@@ -221,9 +223,6 @@ function h5wavemodeling3d(
     dobs = Pr*F*adjoint(Ps)*q
     # qad = Ps*adjoint(F)*adjoint(Pr)*dobs
 
-    print(size(indCellVec[1]))
-    print(size(dobs.data[1]))
-
     for ii in 1:length(indCellVec[1])
       h5geom.writeTrace(dobs.data[1][:,ii], indCellVec[1][ii])
     end
@@ -238,4 +237,91 @@ function h5wavemodeling3d(
     progressDialog.setValue(nsrc+1)
     slicer.app.processEvents()
   end
+end
+
+
+
+# src_frq in KHz
+function h5wavemodeling3d_segy(
+  h5model::PyCall.PyObject, h5geom::PyCall.PyObject;
+  h5model_opt::H5ModelOptions=H5ModelOptions(),
+  h5geom_opt::H5GeomOptions=H5GeomOptions(),
+  opt::JUDI.Options=nothing,
+  src_frq::Float32=0.01f0,
+  src_dt::Number=2,
+  src_nt::Integer=50,
+  rec_dt::Number=2,
+  rec_nt::Integer=50)
+
+  # pylogging = pyimport("logging")
+  h5gt = pyimport("h5gtpy._h5gt")
+  h5geo = pyimport("h5geopy._h5geo")
+
+  qt = nothing
+  slicer = nothing
+  try
+    qt = pyimport("qt")
+    slicer = pyimport("slicer")
+  catch
+  end
+
+  if isnothing(opt)
+    @error "No JUDI Options for modeling"
+    return
+  end
+
+  if src_frq < 0
+    @error "Source frequency is negative"
+    return
+  end
+
+  if src_dt <= 0 || src_nt < 1 || rec_dt <= 0 || rec_nt < 1
+    @error "Source/Receiver timings negative"
+    return
+  end
+
+  model, h5geom_opt.model_orientation = prepare_JUDI_model_3D(h5model, h5opt=h5model_opt)
+  if isnothing(model)
+    @error "Unable to prepare JUDI Model"
+    return
+  end
+
+  # receiver sampling and recording time (JUDI works with positive values)
+  src_t1 = (src_nt-1)*src_dt
+
+  # setup wavelet
+  wavelet = ricker_wavelet(src_t1, src_dt, src_frq)
+
+  srcGeometry, recGeometry, indCellVec = prepare_JUDI_geometry_3D(
+    h5geom, h5opt=h5geom_opt,
+    src_dt=src_dt,
+    src_nt=src_nt,
+    rec_dt=rec_dt,
+    rec_nt=rec_nt)
+  if isnothing(srcGeometry) || isnothing(recGeometry) || isnothing(indCellVec)
+    @error "Unable to prepare Source and Receiver JUDI Geometry"
+    return
+  end
+
+  q = judiVector(srcGeometry, wavelet)
+
+  # Set up info structure for linear operators
+  ntComp = get_computational_nt(srcGeometry, recGeometry, model)
+  info = Info(prod(model.n), length(srcGeometry.xloc), ntComp)
+
+  ###################################################################################################
+
+  opt.save_data_to_disk = true
+  opt.file_path = "/home/kerim/Documents/Colada_prj/my JUDI test"
+  opt.file_name = "test1"
+
+  # Setup operators
+  Pr = judiProjection(info, recGeometry)
+  F = judiModeling(info, model; options=opt)
+  Ps = judiProjection(info, srcGeometry)
+
+  # Nonlinear modeling
+  dobs = Pr*F*adjoint(Ps)*q
+  # qad = Ps*adjoint(F)*adjoint(Pr)*dobs
+    
 end

@@ -1,8 +1,6 @@
-
-
 function prepare_JUDI_model_2D(
   h5model::PyCall.PyObject;
-  model_xkey::String="CDP_X")
+  h5opt::H5ModelOptions=H5ModelOptions())
 
   h5geo = pyimport("h5geopy._h5geo")
 
@@ -17,9 +15,9 @@ function prepare_JUDI_model_2D(
     return
   end
   
-  model_x = h5model.getTraceHeader(model_xkey, 0, typemax(Int), h5model.getLengthUnits(), "m")
+  model_x = h5model.getTraceHeader(h5opt.model_xkey, 0, typemax(Int), h5model.getLengthUnits(), "m")
   if length(model_x) < 2
-    @error "$model_xkey can't have less than 2 points"
+    @error "$h5opt.model_xkey can't have less than 2 points"
     return
   end
   
@@ -42,8 +40,7 @@ end
 
 function prepare_JUDI_model_3D(
   h5model::PyCall.PyObject;
-  model_xkey::String="CDP_X",
-  model_ykey::String="CDP_Y")
+  h5opt::H5ModelOptions=H5ModelOptions())
 
   h5geo = pyimport("h5geopy._h5geo")
 
@@ -56,10 +53,10 @@ function prepare_JUDI_model_3D(
     return
   end
 
-  keylist = [model_xkey, model_ykey]
+  keylist = [h5opt.model_xkey, h5opt.model_ykey]
   xy = h5model.getXYTraceHeaders(keylist, ind, "m", true)
   if isempty(xy)
-    @error "Unable to read $model_xkey and $model_ykey trace headers. Probably length units incorrect/missing"
+    @error "Unable to read $h5opt.model_xkey and $h5opt.model_ykey trace headers. Probably length units incorrect/missing"
     return
   end
 

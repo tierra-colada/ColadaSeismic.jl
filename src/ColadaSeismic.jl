@@ -5,12 +5,18 @@ using JUDI
 using PyCall
 using LinearAlgebra
 
+include("TimeModeling/inner/util.jl")
+include("TimeModeling/inner/options.jl")
+include("TimeModeling/inner/prepare_JUDI_model.jl")
+include("TimeModeling/inner/prepare_JUDI_geometry.jl")
+include("TimeModeling/JUDI_modeling.jl")
+
+
+
 # ONLY WHEN COLADA IS NOT AVAILABLE
 h5geo = pyimport("h5geopy._h5geo")
 h5geo.sr.setSpatialReferenceFromUserInput("EPSG:32056")
 
-include("TimeModeling/util.jl")
-include("TimeModeling/JUDI_modeling.jl")
 
 
 function h5wavemodeling2d()
@@ -94,10 +100,10 @@ function h5wavemodeling3d()
   # srcGeometry, recGeometry, indCellVec = prepare_JUDI_geometry_3D(geom)
 
   # a = 0
-  h5wavemodeling3d(model, geom, opt=opt)
+  h5wavemodeling3d_segy(model, geom, opt=opt)
 end
 
-# h5wavemodeling2d()
-h5wavemodeling3d()
+h5wavemodeling2d()
+# h5wavemodeling3d()
 
 end # module
