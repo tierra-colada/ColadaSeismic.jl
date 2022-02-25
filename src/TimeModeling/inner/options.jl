@@ -1,15 +1,26 @@
-mutable struct H5ModelOptions
-  model_xkey::String
-  model_ykey::String
+@enum H5PhPType begin
+  VELOCITY = 1
+  DENSITY = 2
+  EPSILON = 3
+  DELTA = 4
+  THETA = 5
+  PHI = 6
 end
 
-H5ModelOptions(;
-  model_xkey="CDP_X",
-  model_ykey="CDP_Y"
-) = H5ModelOptions(
-  model_xkey,
-  model_ykey)
+mutable struct H5PhPOptions
+  phptype::H5PhPType
+  xkey::String
+  ykey::String
+end
 
+H5PhPOptions(;
+  phptype=VELOCITY,
+  xkey="CDP_X",
+  ykey="CDP_Y"
+) = H5PhPOptions(
+  phptype,
+  xkey,
+  ykey)
 
 
 mutable struct H5GeomOptions

@@ -5,11 +5,12 @@ using JUDI
 using PyCall
 using LinearAlgebra
 
-include("TimeModeling/inner/util.jl")
+include("TimeModeling/inner/utils.jl")
 include("TimeModeling/inner/options.jl")
-include("TimeModeling/inner/prepare_JUDI_model.jl")
-include("TimeModeling/inner/prepare_JUDI_geometry.jl")
-include("TimeModeling/JUDI_modeling.jl")
+include("TimeModeling/inner/h5judi_geometry.jl")
+# include("TimeModeling/inner/h5judi_model.jl")
+include("TimeModeling/inner/h5judi_physical_parameter.jl")
+include("TimeModeling/h5judi_modeling.jl")
 
 
 
@@ -19,8 +20,7 @@ h5geo.sr.setSpatialReferenceFromUserInput("EPSG:32056")
 
 
 
-function h5wavemodeling2d()
-  h5gt = pyimport("h5gtpy._h5gt")
+function H5Modeling2D()
   h5geo = pyimport("h5geopy._h5geo")
 
   model_filename = "/home/kerim/Documents/Colada_prj/default/DATA/seismic/models.h5"
@@ -54,16 +54,22 @@ function h5wavemodeling2d()
   end
 
   opt = JUDI.Options()
-  h5wavemodeling2d(model, geom, opt=opt)
+  # H5Modeling2D(model, geom, opt=opt)
+
+  # judi_model, orientation = prepare_JUDI_model_3D(model)
+  # srcGeometry, recGeometry, indCellVec = prepare_JUDI_geometry_3D(geom)
+
+  # a = 0
+
+  opt.save_data_to_disk = true
+  opt.file_path = "/home/kerim/Documents/Colada_prj/my JUDI test 2D"
+  opt.file_name = "test"
+  H5Modeling2D_segy(model, geom, opt=opt)
 end
 
 
-function h5wavemodeling3d()
-  h5gt = pyimport("h5gtpy._h5gt")
+function H5Modeling3D()
   h5geo = pyimport("h5geopy._h5geo")
-
-  # MUST BE DELETED
-  h5geo.sr.setSpatialReferenceFromUserInput("EPSG:32056")
 
   model_filename = "/home/kerim/Documents/Colada_prj/default/DATA/seismic/models.h5"
   model_name = "model3d"
@@ -100,10 +106,14 @@ function h5wavemodeling3d()
   # srcGeometry, recGeometry, indCellVec = prepare_JUDI_geometry_3D(geom)
 
   # a = 0
-  h5wavemodeling3d_segy(model, geom, opt=opt)
+
+  opt.save_data_to_disk = true
+  opt.file_path = "/home/kerim/Documents/Colada_prj/my JUDI test 3D"
+  opt.file_name = "test"
+  H5Modeling3D_segy(model, geom, opt=opt)
 end
 
-h5wavemodeling2d()
-# h5wavemodeling3d()
+H5Modeling2D()
+# H5Modeling3D()
 
 end # module
