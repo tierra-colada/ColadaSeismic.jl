@@ -1,25 +1,49 @@
-# src_frq in KHz
-function H5Modeling2D(
-  h5php::PyCall.PyObject, h5geom::PyCall.PyObject;
-  h5php_opt::H5PhPOptions=H5PhPOptions(),
-  h5geom_opt::H5GeomOptions=H5GeomOptions(),
-  opt::JUDI.Options=nothing,
+# operation_type: Forward Modeling, RTM, FWI, TWRI
+function H5Modeling(;
+  # models
+  h5vel::PyCall.PyObject,
+  h5density::PyCall.PyObject=nothing,
+  h5epsilon::PyCall.PyObject=nothing,
+  h5delta::PyCall.PyObject=nothing,
+  h5tetha::PyCall.PyObject=nothing,
+  h5phi::PyCall.PyObject=nothing,
+  model_xkey::String="CDP_X",
+  model_ykey::String="CDP_Y",
+
+  # geometry
+  h5geom::PyCall.PyObject=nothing,
+  geom_segy_files::Array{String,1}=nothing,
+  geom_length_units::String,
+  geom_temporal_units::String,
+  geom_crs::String,
+  geom_src_xkey::String,
+  geom_src_ykey::String,
+  geom_src_zkey::String,
+  geom_rec_xkey::String,
+  geom_rec_ykey::String,
+  geom_rec_zkey::String,
+
+  # judi
+  opt::JUDI.Options,
   src_frq::Float32=0.01f0,
-  src_dt::Number=2,
-  src_nt::Integer=500,
-  rec_dt::Number=2,
-  rec_nt::Integer=500)
+
+  # FWI constraints
+  vmin::Number,
+  vmax::Number,
+
+  computation_type::String,
+  fwi_niter::Int=nothing,
+  fwi_batchsize::Int=nothing,
+  twri_opt::TWRIOptions=nothing
+  )
 
   # pylogging = pyimport("logging")
   h5gt = pyimport("h5gtpy._h5gt")
   h5geo = pyimport("h5geopy._h5geo")
 
-  qt = nothing
-  slicer = nothing
-  try
-    qt = pyimport("qt")
-    slicer = pyimport("slicer")
-  catch
+  if isnothing(h5vel)
+    @error "No velocity model"
+    return
   end
 
   if isnothing(opt)
@@ -27,387 +51,161 @@ function H5Modeling2D(
     return
   end
 
-  if src_frq < 0
-    @error "Source frequency is negative"
+  phpvel, model_orientation = H5ReadPhysicalParameter3D(
+    h5vel, phptype=VELOCITY, xkey=model_xkey, ykey=model_ykey)
+  if isnothing(phpvel)
+    @error "Unable to read PhysicalParameter: VELOCITY"
     return
   end
+  model = JUDI.Model(phpvel.n, phpvel.d, phpvel.o, phpvel.data)
 
-  if src_dt <= 0 || src_nt < 1 || rec_dt <= 0 || rec_nt < 1
-    @error "Source/Receiver timings negative"
-    return
-  end
-
-  php = H5ReadPhysicalParameter2D(h5php, h5opt=h5php_opt)
-  if isnothing(php)
-    @error "Unable to read PhysicalParameter"
-    return
-  end
-
-  model = JUDI.Model(php.n, php.d, php.o, php.data)
-
-  usrc_x = h5geom.getPKeyValues(h5geom_opt.src_xkey, h5geom.getLengthUnits(), "m")
-  if isempty(usrc_x)
-    @error "No $(h5geom_opt.src_xkey) sorting"
-    return
-  end
-
-  # receiver sampling and recording time (JUDI works with positive values)
-  src_t1 = (src_nt-1)*src_dt
-
-  # setup wavelet
-  wavelet = ricker_wavelet(src_t1, src_dt, src_frq)
-
-  nsrc = length(usrc_x)
-  progressDialog = nothing
-  if !isnothing(qt)
-    progressDialog = qt.QProgressDialog("Forward modeling", "Abort", 1, nsrc+1)
-  end
-
-  for i in 1:nsrc
-    if !isnothing(qt)
-      progressDialog.setValue(i)
-      slicer.app.processEvents()
+  if !isnothing(h5density)
+    phpdensity, model_orientation = H5ReadPhysicalParameter3D(
+      h5density, phptype=DENSITY, xkey=model_xkey, ykey=model_ykey)
+    if isnothing(phpdensity)
+      @error "Unable to read PhysicalParameter: DENSITY"
+      return
     end
+  end
 
-    h5geom_opt.src_xkey_min = usrc_x[i]
-    h5geom_opt.src_xkey_max = usrc_x[i]
-    srcGeometry, recGeometry, indCellVec = H5ReadGeometry2D(
-      h5geom, h5opt=h5geom_opt,
-      src_dt=src_dt,
-      src_nt=src_nt,
-      rec_dt=rec_dt,
-      rec_nt=rec_nt)
+  if !isnothing(h5epsilon)
+    phpepsilon, model_orientation = H5ReadPhysicalParameter3D(
+      h5epsilon, phptype=EPSILON, xkey=model_xkey, ykey=model_ykey)
+    if isnothing(phpepsilon)
+      @error "Unable to read PhysicalParameter: EPSILON"
+      return
+    end
+  end
 
-    if isnothing(srcGeometry) || isnothing(recGeometry) || isnothing(indCellVec)
-      @error "Unable to prepare Source and Receiver JUDI Geometry"
+  if !isnothing(h5delta)
+    phpdelta, model_orientation = H5ReadPhysicalParameter3D(
+      h5delta, phptype=DELTA, xkey=model_xkey, ykey=model_ykey)
+    if isnothing(phpdelta)
+      @error "Unable to read PhysicalParameter: DELTA"
+      return
+    end
+  end
+
+  if !isnothing(h5tetha)
+    phptheta, model_orientation = H5ReadPhysicalParameter3D(
+      h5tetha, phptype=THETA, xkey=model_xkey, ykey=model_ykey)
+    if isnothing(phptheta)
+      @error "Unable to read PhysicalParameter: THETA"
+      return
+    end
+  end
+
+  if !isnothing(h5phi)
+    phpphi, model_orientation = H5ReadPhysicalParameter3D(
+      h5phi, phptype=PHI, xkey=model_xkey, ykey=model_ykey)
+    if isnothing(phpphi)
+      @error "Unable to read PhysicalParameter: PHI"
+      return
+    end
+  end
+
+  model = JUDI.Model(phpvel.n, phpvel.d, phpvel.o, phpvel.data, 
+          rho=phpdensity.data, epsilon=phpepsilon.data, delta=phpdelta.data, 
+          theta=phptheta.data, phi=phpphi.data)
+
+  # Geometry
+  if isnothing(h5geom) && isnothing(geom_segy_files)
+    @error "Neither geometry H5Seis nor SEGY files were provided"
+    return
+  end
+
+  if (doRTM || doFWI) && isnothing(geom_segy_files)
+    @error "RTM and FWI works only with SEGY files"
+    return
+  end
+
+  if !isnothing(geom_segy_files)
+    geom_rec_xkey_judi = h5geo2judiTraceHeaderName(geom_rec_xkey)
+    if isnothing(geom_rec_xkey_judi)
+      @error "Unable to map h5geo trace header: $geom_rec_xkey to judi"
+      return
+    end
+    geom_rec_ykey_judi = h5geo2judiTraceHeaderName(geom_rec_ykey)
+    if isnothing(geom_rec_ykey_judi)
+      @error "Unable to map h5geo trace header: $geom_rec_ykey to judi"
+      return
+    end
+    geom_rec_zkey_judi = h5geo2judiTraceHeaderName(geom_rec_zkey)
+    if isnothing(geom_rec_zkey_judi)
+      @error "Unable to map h5geo trace header: $geom_rec_zkey to judi"
+      return
+    end
+    geom_src_zkey_judi = h5geo2judiTraceHeaderName(geom_src_zkey)
+    if isnothing(geom_src_zkey_judi)
+      @error "Unable to map h5geo trace header: $geom_src_zkey to judi"
+      return
+    end
+    # before using there mapped keys I need to modify JUDI Geometry.jl to allow to use custom headers
+    container = segy_scan(geom_segy_files, ["GroupX", "GroupY", "RecGroupElevation", "SourceSurfaceElevation", "dt"])
+    d_obs = judiVector(container)
+    d_obs.geometry.h5geo = h5geo
+    d_obs.geometry.crs = geom_crs
+    d_obs.geometry.lengthUnits = geom_length_units
+    d_obs.geometry.temporalUnits = geom_temporal_units
+    d_obs.geometry.model_origin_x = model.o[1]
+    d_obs.geometry.model_origin_y = model.o[2]
+    d_obs.geometry.model_orientation = model_orientation
+
+    # set up source
+    srcGeometry = Geometry(container; key = "source")
+    srcGeometry.h5geo = h5geo
+    srcGeometry.crs = geom_crs
+    srcGeometry.lengthUnits = geom_length_units
+    srcGeometry.temporalUnits = geom_temporal_units
+    srcGeometry.model_origin_x = model.o[1]
+    srcGeometry.model_origin_y = model.o[2]
+    srcGeometry.model_orientation = model_orientation
+
+    # setup wavelet
+    wavelet = ricker_wavelet(srcGeometry.t[1], srcGeometry.dt[1], src_frq)
+    q = judiVector(srcGeometry, wavelet)
+  else
+    dt = h5geom.getSampRate("ms")
+    nt = h5geom.getNSamp()
+    srcGeometry, recGeometry, indCellVec = H5ReadGeometry(
+      h5geom,
+      src_xkey=geom_src_xkey,
+      src_ykey=geom_src_ykey,
+      src_zkey=geom_src_zkey,
+      rec_xkey=geom_rec_xkey,
+      rec_ykey=geom_rec_ykey,
+      rec_zkey=geom_rec_zkey,
+      src_dt=dt,
+      src_nt=nt,
+      rec_dt=dt,
+      rec_nt=nt)
+    if isnothing(srcGeometry) || isnothing(srcGeometry) || isnothing(indCellVec)
+      @error "Unable to prepare Source and Receiver JUDI Geometry objects from H5Seis"
       return
     end
 
-    q = judiVector(srcGeometry, wavelet)
 
-    # Set up info structure for linear operators
-    ntComp = get_computational_nt(srcGeometry, recGeometry, model)
-    info = Info(prod(model.n), 1, ntComp)
-
-    ###################################################################################################
-
-    # Setup operators
-    Pr = judiProjection(info, recGeometry)
-    F = judiModeling(info, model; options=opt)
-    Ps = judiProjection(info, srcGeometry)
-
-    # Nonlinear modeling
-    dobs = Pr*F*adjoint(Ps)*q
-    # qad = Ps*adjoint(F)*adjoint(Pr)*dobs
-
-    for ii in 1:length(indCellVec[1])
-      h5geom.writeTrace(dobs.data[1][:,ii], indCellVec[1][ii])
-    end
-    h5geom.getH5File().flush(true)
-
-    if !isnothing(qt) && progressDialog.wasCanceled
-      break
-    end
   end
 
-  if !isnothing(qt)
-    progressDialog.setValue(nsrc+1)
-    slicer.app.processEvents()
-  end
-end
-
-
-# src_frq in KHz
-function H5Modeling2D_segy(
-  h5php::PyCall.PyObject, h5geom::PyCall.PyObject;
-  h5php_opt::H5PhPOptions=H5PhPOptions(),
-  h5geom_opt::H5GeomOptions=H5GeomOptions(),
-  opt::JUDI.Options=nothing,
-  src_frq::Float32=0.01f0,
-  src_dt::Number=2,
-  src_nt::Integer=500,
-  rec_dt::Number=2,
-  rec_nt::Integer=500)
-
-  # pylogging = pyimport("logging")
-  h5gt = pyimport("h5gtpy._h5gt")
-  h5geo = pyimport("h5geopy._h5geo")
-
-  qt = nothing
-  slicer = nothing
-  try
-    qt = pyimport("qt")
-    slicer = pyimport("slicer")
-  catch
-  end
-
-  if isnothing(opt)
-    @error "No JUDI Options for modeling"
-    return
-  end
-
-  if src_frq < 0
-    @error "Source frequency is negative"
-    return
-  end
-
-  if src_dt <= 0 || src_nt < 1 || rec_dt <= 0 || rec_nt < 1
-    @error "Source/Receiver timings negative"
-    return
-  end
-
-  php = H5ReadPhysicalParameter2D(h5php, h5opt=h5php_opt)
-  if isnothing(php)
-    @error "Unable to read PhysicalParameter"
-    return
-  end
-
-  model = JUDI.Model(php.n, php.d, php.o, php.data)
-
-  # receiver sampling and recording time (JUDI works with positive values)
-  src_t1 = (src_nt-1)*src_dt
-
-  # setup wavelet
-  wavelet = ricker_wavelet(src_t1, src_dt, src_frq)
-
-  srcGeometry, recGeometry, _ = H5ReadGeometry2D(
-    h5geom, h5opt=h5geom_opt,
-    src_dt=src_dt,
-    src_nt=src_nt,
-    rec_dt=rec_dt,
-    rec_nt=rec_nt)
-  if isnothing(srcGeometry) || isnothing(recGeometry)
-    @error "Unable to prepare Source and Receiver JUDI Geometry"
-    return
-  end
-
-  nsrc = length(srcGeometry.xloc)
-
-  # Set up info structure for linear operators
-  ntComp = get_computational_nt(srcGeometry, recGeometry, model)
-  info = Info(prod(model.n), nsrc, ntComp)
-
-  q = judiVector(srcGeometry, wavelet)
-
-  ###################################################################################################
-
-  # Setup operators
-  Pr = judiProjection(info, recGeometry)
-  F = judiModeling(info, model; options=opt)
-  Ps = judiProjection(info, srcGeometry)
-
-  # Nonlinear modeling
-  dobs = Pr*F*adjoint(Ps)*q
-  # qad = Ps*adjoint(F)*adjoint(Pr)*dobs
-end
 
 
 
-# src_frq in KHz
-function H5Modeling3D(
-  h5php::PyCall.PyObject, h5geom::PyCall.PyObject;
-  h5php_opt::H5PhPOptions=H5PhPOptions(),
-  h5geom_opt::H5GeomOptions=H5GeomOptions(),
-  opt::JUDI.Options=nothing,
-  src_frq::Float32=0.01f0,
-  src_dt::Number=2,
-  src_nt::Integer=500,
-  rec_dt::Number=2,
-  rec_nt::Integer=500)
+  function H5ReadGeometry(
+    h5obj::PyCall.PyObject;
+    src_xkey="SRCX",
+    src_ykey="SRCY",
+    src_zkey="SES",
+    rec_xkey="GRPX",
+    rec_ykey="GRPY",
+    rec_zkey="RGE",
+    src_xkey_min::Float64=-Inf,
+    src_xkey_max::Float64=Inf,
+    src_ykey_min::Float64=-Inf,
+    src_ykey_max::Float64=Inf,
+    src_dt::Number,
+    src_nt::Integer,
+    rec_dt::Number,
+    rec_nt::Integer,
+    model_orientation::Number=0.0)
 
-  # pylogging = pyimport("logging")
-  h5gt = pyimport("h5gtpy._h5gt")
-  h5geo = pyimport("h5geopy._h5geo")
-
-  qt = nothing
-  slicer = nothing
-  try
-    qt = pyimport("qt")
-    slicer = pyimport("slicer")
-  catch
-  end
-
-  if isnothing(opt)
-    @error "No JUDI Options for modeling"
-    return
-  end
-
-  if src_frq < 0
-    @error "Source frequency is negative"
-    return
-  end
-
-  if src_dt <= 0 || src_nt < 1 || rec_dt <= 0 || rec_nt < 1
-    @error "Source/Receiver timings negative"
-    return
-  end
-
-  php, h5geom_opt.model_orientation = H5ReadPhysicalParameter3D(h5php, h5opt=h5php_opt)
-  if isnothing(model)
-    @error "Unable to read PhysicalParameter"
-    return
-  end
-
-  model = JUDI.Model(php.n, php.d, php.o, php.data)
-
-  keylist = [h5geom_opt.src_xkey, h5geom_opt.src_ykey]
-  minlist = [-Inf, -Inf]
-  maxlist = [Inf, Inf]
-  _, src_xy, _ = h5geom.getSortedData(keylist, minlist, maxlist, 0, 0, true, "", "m", true)
-  if isempty(src_xy)
-    @error "Unable to get sorted src_x src_y headers. Probably $(h5geom_opt.src_xkey) is missing"
-    return
-  end
-
-  _, usrc_xy, _ = h5geo.sort_rows_unique(src_xy)
-
-  # receiver sampling and recording time (JUDI works with positive values)
-  src_t1 = (src_nt-1)*src_dt
-
-  # setup wavelet
-  wavelet = ricker_wavelet(src_t1, src_dt, src_frq)
-
-  nsrc = size(usrc_xy)[1]
-  progressDialog = nothing
-  if !isnothing(qt)
-    progressDialog = qt.QProgressDialog("Forward modeling", "Abort", 1, nsrc+1)
-  end
-
-  for i in 1:nsrc
-    if !isnothing(qt)
-      progressDialog.setValue(i)
-      slicer.app.processEvents()
-    end
-
-    h5geom_opt.src_xkey_min = usrc_x[i]
-    h5geom_opt.src_xkey_max = usrc_x[i]
-    h5geom_opt.src_ykey_min = usrc_y[i]
-    h5geom_opt.src_ykey_max = usrc_y[i]
-    srcGeometry, recGeometry, indCellVec = H5ReadGeometry3D(
-      h5geom, h5opt=h5geom_opt,
-      src_dt=src_dt,
-      src_nt=src_nt,
-      rec_dt=rec_dt,
-      rec_nt=rec_nt)
-    if isnothing(srcGeometry) || isnothing(recGeometry) || isnothing(indCellVec)
-      @error "Unable to prepare Source and Receiver JUDI Geometry"
-      return
-    end
-
-    q = judiVector(srcGeometry, wavelet)
-
-    # Set up info structure for linear operators
-    ntComp = get_computational_nt(srcGeometry, recGeometry, model)
-    info = Info(prod(model.n), 1, ntComp)
-
-    ###################################################################################################
-
-    # Setup operators
-    Pr = judiProjection(info, recGeometry)
-    F = judiModeling(info, model; options=opt)
-    Ps = judiProjection(info, srcGeometry)
-
-    # Nonlinear modeling
-    dobs = Pr*F*adjoint(Ps)*q
-    # qad = Ps*adjoint(F)*adjoint(Pr)*dobs
-
-    for ii in 1:length(indCellVec[1])
-      h5geom.writeTrace(dobs.data[1][:,ii], indCellVec[1][ii])
-    end
-    h5geom.getH5File().flush(true)
-
-    if !isnothing(qt) && progressDialog.wasCanceled
-      break
-    end
-  end
-
-  if !isnothing(qt)
-    progressDialog.setValue(nsrc+1)
-    slicer.app.processEvents()
-  end
-end
-
-
-
-# src_frq in KHz
-function H5Modeling3D_segy(
-  h5php::PyCall.PyObject, h5geom::PyCall.PyObject;
-  h5php_opt::H5PhPOptions=H5PhPOptions(),
-  h5geom_opt::H5GeomOptions=H5GeomOptions(),
-  opt::JUDI.Options=nothing,
-  src_frq::Float32=0.01f0,
-  src_dt::Number=2,
-  src_nt::Integer=500,
-  rec_dt::Number=2,
-  rec_nt::Integer=500)
-
-  # pylogging = pyimport("logging")
-  h5gt = pyimport("h5gtpy._h5gt")
-  h5geo = pyimport("h5geopy._h5geo")
-
-  qt = nothing
-  slicer = nothing
-  try
-    qt = pyimport("qt")
-    slicer = pyimport("slicer")
-  catch
-  end
-
-  if isnothing(opt)
-    @error "No JUDI Options for modeling"
-    return
-  end
-
-  if src_frq < 0
-    @error "Source frequency is negative"
-    return
-  end
-
-  if src_dt <= 0 || src_nt < 1 || rec_dt <= 0 || rec_nt < 1
-    @error "Source/Receiver timings negative"
-    return
-  end
-
-  model, h5geom_opt.model_orientation = H5ReadPhysicalParameter3D(h5php, h5opt=h5php_opt)
-  if isnothing(model)
-    @error "Unable to prepare JUDI Model"
-    return
-  end
-
-  # receiver sampling and recording time (JUDI works with positive values)
-  src_t1 = (src_nt-1)*src_dt
-
-  # setup wavelet
-  wavelet = ricker_wavelet(src_t1, src_dt, src_frq)
-
-  srcGeometry, recGeometry, indCellVec = H5ReadGeometry3D(
-    h5geom, h5opt=h5geom_opt,
-    src_dt=src_dt,
-    src_nt=src_nt,
-    rec_dt=rec_dt,
-    rec_nt=rec_nt)
-  if isnothing(srcGeometry) || isnothing(recGeometry) || isnothing(indCellVec)
-    @error "Unable to prepare Source and Receiver JUDI Geometry"
-    return
-  end
-
-  nsrc = length(srcGeometry.xloc)
-
-  # Set up info structure for linear operators
-  ntComp = get_computational_nt(srcGeometry, recGeometry, model)
-  info = Info(prod(model.n), nsrc, ntComp)
-
-  q = judiVector(srcGeometry, wavelet)
-
-  ###################################################################################################
-
-  # Setup operators
-  Pr = judiProjection(info, recGeometry)
-  F = judiModeling(info, model; options=opt)
-  Ps = judiProjection(info, srcGeometry)
-
-  # Nonlinear modeling
-  dobs = Pr*F*adjoint(Ps)*q
-  # qad = Ps*adjoint(F)*adjoint(Pr)*dobs
-    
 end

@@ -121,3 +121,77 @@ function H5ReadGeometry3D(
   recGeometry = Geometry(recXCellVec, recYCellVec, recZCellVec; dt=rec_dt, t=rec_t1)
   return srcGeometry, recGeometry, indCellVec
 end
+
+
+function H5ReadGeometry(
+  h5obj::PyCall.PyObject;
+  src_xkey="SRCX",
+  src_ykey="SRCY",
+  src_zkey="SES",
+  rec_xkey="GRPX",
+  rec_ykey="GRPY",
+  rec_zkey="RGE",
+  src_xkey_min::Float64=-Inf,
+  src_xkey_max::Float64=Inf,
+  src_ykey_min::Float64=-Inf,
+  src_ykey_max::Float64=Inf,
+  src_dt::Number,
+  src_nt::Integer,
+  rec_dt::Number,
+  rec_nt::Integer,
+  model_orientation::Number=0.0)
+
+  h5geo = pyimport("h5geopy._h5geo")
+
+  if src_dt <= 0 || src_nt < 1 || rec_dt <= 0 || rec_nt < 1
+    @error "Source/Receiver timings negative"
+    return
+  end
+
+  keylist = [src_xkey, src_ykey]
+  minlist = [src_xkey_min, src_ykey_min]
+  maxlist = [src_xkey_max, src_ykey_max]
+  _, src_xy, _ = h5obj.getSortedData(keylist, minlist, maxlist, 0, 0, true, "", "m", true)
+  if isempty(src_xy)
+    @error "Unable to get sorted src_x src_y headers. Probably $(src_xkey) is missing"
+    return
+  end
+
+  _, usrc_xy, _ = h5geo.sort_rows_unique(src_xy)
+
+  # receiver sampling and recording time
+  src_t1 = (src_nt-1)*src_dt
+  rec_t1 = (rec_nt-1)*rec_dt
+  
+  nsrc = size(usrc_xy)[1]
+  keylist = [src_xkey, src_ykey]
+  srcXCellVec = Vector{Vector{Float32}}(undef, nsrc)
+  srcYCellVec = Vector{Vector{Float32}}(undef, nsrc)
+  srcZCellVec = Vector{Vector{Float32}}(undef, nsrc)
+  recXCellVec = Vector{Vector{Float32}}(undef, nsrc)
+  recYCellVec = Vector{Vector{Float32}}(undef, nsrc)
+  recZCellVec = Vector{Vector{Float32}}(undef, nsrc)
+  indCellVec = Vector{Vector{Int64}}(undef, nsrc)
+  for i in 1:nsrc
+    minlist = [usrc_xy[i,1], usrc_xy[i,2]]
+    maxlist = [usrc_xy[i,1], usrc_xy[i,2]]
+    _, _, indCellVec[i] = h5obj.getSortedData(keylist, minlist, maxlist, 0, 0)
+  
+    # Set up source geometry (cell array with source locations for each shot)
+    src_xy_rot = rotate_2xN_array(usrc_xy[i,:], -model_orientation)
+    srcXCellVec[i] = [src_xy_rot[1]]
+    srcYCellVec[i] = [src_xy_rot[2]]
+    srcZCellVec[i] = -h5obj.getTraceHeader(src_zkey, indCellVec[i][1], 1, h5obj.getLengthUnits(), "m")[:]
+
+    # Set up receiver structure
+    rec_xy = h5obj.getTraceHeader([rec_xkey, rec_ykey], indCellVec[i], [h5obj.getLengthUnits(), h5obj.getLengthUnits()], ["m", "m"])
+    rec_xy_rot = rotate_Nx2_array(rec_xy, -model_orientation)
+    recXCellVec[i] = rec_xy_rot[:,1]
+    recYCellVec[i] = rec_xy_rot[:,2]
+    recZCellVec[i] = -h5obj.getTraceHeader([rec_zkey], indCellVec[i], [h5obj.getLengthUnits()], ["m"])[:]
+  end
+
+  srcGeometry = Geometry(srcXCellVec, srcYCellVec, srcZCellVec; dt=src_dt, t=src_t1)
+  recGeometry = Geometry(recXCellVec, recYCellVec, recZCellVec; dt=rec_dt, t=rec_t1)
+  return srcGeometry, recGeometry, indCellVec
+end
