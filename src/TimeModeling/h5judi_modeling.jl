@@ -114,11 +114,6 @@ function H5Modeling(;
     return
   end
 
-  if (doRTM || doFWI) && isnothing(geom_segy_files)
-    @error "RTM and FWI works only with SEGY files"
-    return
-  end
-
   if !isnothing(geom_segy_files)
     geom_rec_xkey_judi = h5geo2judiTraceHeaderName(geom_rec_xkey)
     if isnothing(geom_rec_xkey_judi)
@@ -150,6 +145,7 @@ function H5Modeling(;
     d_obs.geometry.model_origin_x = model.o[1]
     d_obs.geometry.model_origin_y = model.o[2]
     d_obs.geometry.model_orientation = model_orientation
+    recGeometry = d_obs.geometry
 
     # set up source
     srcGeometry = Geometry(container; key = "source")
@@ -160,10 +156,6 @@ function H5Modeling(;
     srcGeometry.model_origin_x = model.o[1]
     srcGeometry.model_origin_y = model.o[2]
     srcGeometry.model_orientation = model_orientation
-
-    # setup wavelet
-    wavelet = ricker_wavelet(srcGeometry.t[1], srcGeometry.dt[1], src_frq)
-    q = judiVector(srcGeometry, wavelet)
   else
     dt = h5geom.getSampRate("ms")
     nt = h5geom.getNSamp()
@@ -183,29 +175,22 @@ function H5Modeling(;
       @error "Unable to prepare Source and Receiver JUDI Geometry objects from H5Seis"
       return
     end
-
-
   end
 
+  # setup wavelet
+  wavelet = ricker_wavelet(srcGeometry.t[1], srcGeometry.dt[1], src_frq)
+  q = judiVector(srcGeometry, wavelet)
 
-
-
-  function H5ReadGeometry(
-    h5obj::PyCall.PyObject;
-    src_xkey="SRCX",
-    src_ykey="SRCY",
-    src_zkey="SES",
-    rec_xkey="GRPX",
-    rec_ykey="GRPY",
-    rec_zkey="RGE",
-    src_xkey_min::Float64=-Inf,
-    src_xkey_max::Float64=Inf,
-    src_ykey_min::Float64=-Inf,
-    src_ykey_max::Float64=Inf,
-    src_dt::Number,
-    src_nt::Integer,
-    rec_dt::Number,
-    rec_nt::Integer,
-    model_orientation::Number=0.0)
+  if computation_type == "Forward Modeling"
+    H5ForwardModeling(model=model, opt=opt, q=q, recGeometry=recGeometry)
+  elseif computation_type == "RTM"
+    H5RTM(model=model, opt=opt, q=q, dobs=dobs)
+  elseif computation_type == "FWI"
+    H5FWI(model=model, opt=opt, q=q, dobs=dobs, 
+          niterations=fwi_niter, batchsize=fwi_batchsize, 
+          vmin=vmin, vmax=vmax)
+  elseif computation_type == "TWRI"
+    @error "TWRI not ready yet"
+  end
 
 end

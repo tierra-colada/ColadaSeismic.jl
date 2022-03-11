@@ -2,8 +2,7 @@
 function H5FWI(;
   model::JUDI.Model,
   opt::JUDI.Options,
-  src_frq::Float32,
-  srcGeometry, 
+  q::JUDI.judiVector, 
   dobs::JUDI.judiVector,
   niterations::Int,
   batchsize::Int,
@@ -14,12 +13,8 @@ function H5FWI(;
   mmin = vec(ones(Float32, model.n) .* (1f0 / vmax)^2)
   mmax = vec(ones(Float32, model.n) .* (1f0 / vmin)^2)
 
-  # setup wavelet
-  wavelet = ricker_wavelet(srcGeometry.t[1], srcGeometry.dt[1], src_frq)
-  q = judiVector(srcGeometry, wavelet)
-
   ############################### FWI ###########################################
-  F = judiModeling(deepcopy(model), srcGeometry, dobs.geometry)
+  F = judiModeling(deepcopy(model), q.geometry, dobs.geometry; options=opt)
 
   # Optimization parameters
   if niterations < 1

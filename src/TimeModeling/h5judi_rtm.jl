@@ -1,18 +1,13 @@
 function H5RTM(;
   model::JUDI.Model,
   opt::JUDI.Options,
-  src_frq::Float32,
-  srcGeometry, 
+  q::JUDI.judiVector, 
   dobs::JUDI.judiVector)
 
-  # setup wavelet
-  wavelet = ricker_wavelet(srcGeometry.t[1], srcGeometry.dt[1], src_frq)
-  q = judiVector(srcGeometry, wavelet)
-
-  nsrc = length(srcGeometry.xloc)
+  nsrc = length(q.geometry.xloc)
 
   # Set up info structure for linear operators
-  ntComp = get_computational_nt(srcGeometry, dobs.geometry, model)
+  ntComp = get_computational_nt(q.geometry, dobs.geometry, model)
   info = Info(prod(model.n), nsrc, ntComp)
 
   ###################################################################################################

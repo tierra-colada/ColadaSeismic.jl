@@ -1,17 +1,13 @@
 function H5ForwardModeling(;
   model::JUDI.Model,
   opt::JUDI.Options,
-  src_frq::Float32,
-  srcGeometry, recGeometry)
+  q::JUDI.judiVector,
+  recGeometry)
 
-  # setup wavelet
-  wavelet = ricker_wavelet(srcGeometry.t[1], srcGeometry.dt[1], src_frq)
-  q = judiVector(srcGeometry, wavelet)
-
-  nsrc = length(srcGeometry.xloc)
+  nsrc = length(q.geometry.xloc)
 
   # Set up info structure for linear operators
-  ntComp = get_computational_nt(srcGeometry, recGeometry, model)
+  ntComp = get_computational_nt(q.geometry, recGeometry, model)
   info = Info(prod(model.n), nsrc, ntComp)
 
   ###################################################################################################
@@ -19,7 +15,7 @@ function H5ForwardModeling(;
   # Setup operators
   Pr = judiProjection(info, recGeometry)
   F = judiModeling(info, model; options=opt)
-  Ps = judiProjection(info, srcGeometry)
+  Ps = judiProjection(info, q.geometry)
 
   # Nonlinear modeling
   dobs = Pr*F*adjoint(Ps)*q
