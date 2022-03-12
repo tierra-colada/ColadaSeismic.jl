@@ -1,2 +1,2 @@
 # ColadaSeismic.jl
-Julia modules to works with seismic within Colada app
+Julia modules to work with seismic within Colada app

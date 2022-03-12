@@ -7,12 +7,8 @@ using LinearAlgebra
 
 # h5geo includes
 include("h5geo/h5geo.jl")
-# include("h5geo/H5Seis.jl")
-# include("h5geo/H5SeisCon.jl")
-# include("h5geo/read_H5SeisCon.jl")
-# include("h5geo/H5Geometry.jl")
-# include("h5geo/H5judiVector.jl")
 
+# Colada includes
 include("TimeModeling/inner/util.jl")
 include("TimeModeling/inner/options.jl")
 include("TimeModeling/inner/h5judi_geometry.jl")

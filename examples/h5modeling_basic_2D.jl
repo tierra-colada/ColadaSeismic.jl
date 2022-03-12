@@ -1,10 +1,115 @@
-# Example for basic 2D modeling:
-# The receiver positions and the source wavelets are the same for each of the four experiments.
-# Author: Philipp Witte, pwitte@eos.ubc.ca
-# Date: January 2017
-#
+# This example demonstrates how to use custom h5geo data containers within JUDI.
+# The idea of the example is to generate SEGY files using JUDI API
+# and after that use generated SEGY files to prepare HDF5 containers with h5geo library.
+# After the h5geo containers are created they are planned to be used to calculate FWI, RSTM, TWRI.
+# The example creates 'ColadaSeismic/examles/tmp' folder and stores all the calculated data there.
+# For now I tested that with JUDI 'time-tests' branch wich is not finished yet and 
+# it throws exception when JUDI.Options::save_data_to_disk is 'true'.
+# Thus I distribute previously modeled SEGY files with 'master' branch
 
-using JUDI, ColadaSeismic, SegyIO, LinearAlgebra, PyCall
+
+using ColadaSeismic, JUDI, SegyIO, LinearAlgebra, PyCall, PyPlot
+
+# 'h5map_segy' maps SEGY to HDF5 h5geo::H5Seis object so that the same API is provided
+# but no any data is read from SEGY
+function h5map_segy(segy_files::Array{String})
+  if length(segy_files) < 1
+    @error "No SEGY files were provided"
+    return
+  end
+
+  h5geo = pyimport("h5geopy._h5geo")
+  if isnothing(h5geo)
+    @error "Unable to import h5geo"
+    return
+  end
+
+  container_name = splitext(segy_files[1])[1]
+  container_name *= "_mapped.h5"
+  container = h5geo.createSeisContainerByName(container_name, h5geo.CreationType.CREATE_UNDER_NEW_NAME)
+  if isnothing(container)
+    @error "Unable to create HDF5 container: $container_name"
+    return
+  end
+
+  # parameters to create seis object
+  p = h5geo.SeisParam()
+  # Cant understand why in julia inheritance from H5BaseObject doesn't work
+  # p.lengthUnits = "cm"
+  # p.temporalUnits = "microsecond"
+  p.domain = h5geo.Domain.TWT
+  p.dataType = h5geo.SeisDataType.PRESTACK
+  p.surveyType = h5geo.SurveyType.TWO_D
+  p.trcChunk = 5
+  p.segyFiles = segy_files
+  p.mapSEGY = true
+
+  @info "segy_files[1]: $(segy_files[1])"
+  @info "segy_files[2]: $(segy_files[2])"
+
+  seis_name = "mapped_segy"
+  seis = container.createSeis(seis_name, p, h5geo.CreationType.CREATE_OR_OVERWRITE)
+  if isnothing(seis)
+    @error "Unable to create seis"
+    return
+  end
+
+  seis.setLengthUnits("cm")
+  seis.setTemporalUnits("microsecond")
+  return seis
+end
+
+# 'h5read_segy' read SEGY files to HDF5 h5geo::H5Seis object
+function h5read_segy(segy_files::Array{String})
+  if length(segy_files) < 1
+    @error "No SEGY files were provided"
+    return
+  end
+
+  h5geo = pyimport("h5geopy._h5geo")
+  if isnothing(h5geo)
+    @error "Unable to import h5geo"
+    return
+  end
+
+  container_name = splitext(segy_files[1])[1]
+  container_name *= "_read.h5"
+  container = h5geo.createSeisContainerByName(container_name, h5geo.CreationType.CREATE_UNDER_NEW_NAME)
+  if isnothing(container)
+    @error "Unable to create HDF5 container: $container_name"
+    return
+  end
+
+  # parameters to create seis object
+  p = h5geo.SeisParam()
+  # Cant understand why in julia inheritance from H5BaseObject doesn't work
+  # p.lengthUnits = "cm"
+  # p.temporalUnits = "microsecond"
+  p.domain = h5geo.Domain.TWT
+  p.dataType = h5geo.SeisDataType.PRESTACK
+  p.surveyType = h5geo.SurveyType.TWO_D
+  # explicitely set 'nSamp' so that chunking along 1-st dim is equal to 'nSamp'
+  p.nSamp = h5geo.getSEGYNSamp(segy_files[1], h5geo.getSEGYEndian(segy_files[1]))
+  # 'nTrc' must be bigger that 'trcChunk'
+  p.nTrc = 10
+  p.trcChunk = 5
+
+  @info "segy_files[1]: $(segy_files[1])"
+  @info "segy_files[2]: $(segy_files[2])"
+  @info "p.nSamp: $(p.nSamp)"
+
+  seis_name = "read_segy"
+  seis = container.createSeis(seis_name, p, h5geo.CreationType.CREATE_OR_OVERWRITE)
+  if isnothing(seis)
+    @error "Unable to create seis"
+    return
+  end
+
+  seis.readSEGYTraces(segy_files)
+  seis.setLengthUnits("cm")
+  seis.setTemporalUnits("microsecond")
+  return seis
+end
 
 # Set up model structure
 n = (120, 100)   # (x,y,z) or (x,z)
@@ -30,9 +135,8 @@ model0 = Model(n, d, o, m0)
 # Set up receiver geometry
 nxrec = 120
 xrec = range(50f0, stop=1150f0, length=nxrec)
-# yrec = range(0f0, stop=0f0, length=nxrec)
 yrec = 0f0
-zrec = range(0f0, stop=0f0, length=nxrec)
+zrec = range(50f0, stop=50f0, length=nxrec)
 
 # receiver sampling and recording time
 timeR = 1000f0   # receiver recording time [ms]
@@ -64,42 +168,16 @@ info = Info(prod(n), nsrc, ntComp)
 
 ###################################################################################################
 
-h5geo = pyimport("h5geopy._h5geo")
+segy_path = @__DIR__
+segy_path *= "/tmp/"
+segy_name = "shot"
 
-geom_filename = "/home/kerim/Documents/Colada_prj/original JUDI examples/modeling_basic_2d/M_400.h5"
-# geom_filename = "/home/kerim/Documents/Colada_prj/original JUDI examples/modeling_basic_2d/M_400_NOT_MAPPED.h5"
-geom_name = "M_400"
+# rm(segy_path, force=true, recursive=true)
+# mkpath(segy_path)
 
-geomCnt = h5geo.openSeisContainerByName(geom_filename)
-if isnothing(geomCnt)
-  @error "Unable to open geom container: $geom_filename"
-  return
-end
-
-geom = geomCnt.openSeis(geom_name)
-if isnothing(geom)
-  @error "Unable to open geom: $geom_name"
-  return
-end
-
-geom.removePKeySort("SRCX")
-geom.addPKeySort("SRCX")
-
-con = H5SeisCon(seis=geom, pkey="SRCX")
-dobs = judiVector(con)
-
-# Scan directory for segy files and create out-of-core data container
-container = segy_scan("/home/kerim/Documents/Colada_prj/original JUDI examples/modeling_basic_2d/useful/", "M_",
-                     ["GroupX", "GroupY", "RecGroupElevation", "SourceSurfaceElevation", "dt"])
-dobs_segyio = judiVector(container)
-
-# temporary set geom to avoid round off mismatch error
-# recGeometry = dobs.geometry
-dobs.geometry = recGeometry
-
-###################################################################################################
-
-# Write shots as segy files to disk
+# Write shots as segy files to disk (gives error in 'time-tests' branch)
+# opt = Options(optimal_checkpointing=false, isic=false, subsampling_factor=2, dt_comp=1.0,
+#               save_data_to_disk=true, file_path=segy_path, file_name=segy_name)
 opt = Options(optimal_checkpointing=false, isic=false, subsampling_factor=2, dt_comp=1.0)
 
 # Setup operators
@@ -110,50 +188,82 @@ Ps = judiProjection(info, srcGeometry)
 J = judiJacobian(Pr*F0*adjoint(Ps), q)
 
 # Nonlinear modeling
-# dobs = Pr*F*adjoint(Ps)*q
+dobs = Pr*F*adjoint(Ps)*q
 
-# opt.file_path = "/home/kerim/Documents/Colada_prj/original JUDI examples/modeling_basic_2d/"
-# opt.file_name = "MM"
+# modeled SEGY files
+files = readdir(segy_path, join=true)
+segy_files = Array{String}(undef, 0)
+for file in files
+  if splitext(file)[2] == ".segy"
+    push!(segy_files, file)
+  end
+end
 
-# Adjoint
+# Ether map SEGY (only ieee32 supported) or read (any 4-byte format) it
 
+# seis = h5map_segy(segy_files)
+seis = h5read_segy(segy_files)
+if isnothing(seis)
+  @error "Unable to create seis"
+  return
+end
+
+# To retrieve sorted data we need to prepare sorting from primary keys (PKey)
+# 'h5geo' uses trace header names that differs from the ones that uses SegyIO
+if !seis.hasPKeySort("SRCX")
+  seis.addPKeySort("SRCX")
+end
+
+# create H5SeisCon and judiVector from it
+con = H5SeisCon(seis=seis, pkey="SRCX")
+h5dobs = judiVector(con)
+
+# as long as SEGY stores coordinates in Int32 and h5geo stores it in Float64
+# we need to set previously calculated 'recGeometry' to prevent round off mismatch error (needed only for this example)
+h5dobs.geometry = recGeometry
+
+##################################################################################################
+
+# Continue colaculations  (FWI, RSTM etc) with 'judiVector{H5SeisCon}'
+
+# Adjoint with h5dobs
 pdeFull = Ps*adjoint(F)*adjoint(Pr)
-qad = pdeFull*dobs
+qad = pdeFull*h5dobs
 
 # Linearized modeling
 dD = J*dm
 # Adjoint jacobian
 rtm = adjoint(J)*dD
 
-# evaluate FWI objective function
-f, g = fwi_objective(model0, q, dobs; options=opt)
+# evaluate FWI objective function with h5dobs
+f, g = fwi_objective(model0, q, h5dobs; options=opt)
 
-imshow(g'); title("FWI (g)")
-savefig("g.png")
+imshow(g'); title("FWI (g')")
+savefig(segy_path * "/g.png")
 
-# TWRI
-f, gm, gy = twri_objective(model0, q, dobs, nothing; options=opt, optionswri=TWRIOptions(params=:all))
-f, gm = twri_objective(model0, q, dobs, nothing; options=Options(frequencies=[[.009, .011], [.008, .012]]),
+# TWRI with h5dobs
+f, gm, gy = twri_objective(model0, q, h5dobs, nothing; options=opt, optionswri=TWRIOptions(params=:all))
+f, gm = twri_objective(model0, q, h5dobs, nothing; options=Options(frequencies=[[.009, .011], [.008, .012]]),
                                                  optionswri=TWRIOptions(params=:m))
 
-imshow(gm'); title("TWRI (gm)")
-savefig("gm.png")
+imshow(gm'); title("TWRI (gm')")
+savefig(segy_path * "/gm.png")
 
-# evaluate LSRTM objective function
+# evaluate LSRTM objective function with h5dobs
 fj, gj = lsrtm_objective(model0, q, dD, dm; options=opt)
-fjn, gjn = lsrtm_objective(model0, q, dobs, dm; nlind=true, options=opt)
+fjn, gjn = lsrtm_objective(model0, q, h5dobs, dm; nlind=true, options=opt)
 
-imshow(gj'); title("LSRTM (gj)")
-savefig("gj.png")
-imshow(gjn'); title("LSRTM (gjn)")
-savefig("gjn.png")
+imshow(gj'); title("LSRTM (gj')")
+savefig(segy_path * "/gj.png")
+imshow(gjn'); title("LSRTM (gjn')")
+savefig(segy_path * "/gjn.png")
 
 # By extension, lsrtm_objective is the same as fwi_objecive when `dm` is zero
 # And with computing of the residual. Small noise can be seen in the difference
 # due to floating point roundoff errors with openMP, but running with 
 # OMP_NUM_THREAS=1 (no parllelism) produces the exact (difference == 0) same result
 # gjn2 == g
-fjn2, gjn2 = lsrtm_objective(model0, q, dobs, 0f0.*dm; nlind=true, options=opt)
+fjn2, gjn2 = lsrtm_objective(model0, q, h5dobs, 0f0.*dm; nlind=true, options=opt)
 
-imshow(gjn2'); title("LSRTM (gjn2)")
-savefig("gjn2.png")
+imshow(gjn2'); title("LSRTM (gjn2')")
+savefig(segy_path * "/gjn2.png")
