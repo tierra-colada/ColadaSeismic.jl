@@ -1,4 +1,4 @@
-import JUDI.get_data, JUDI.judiVector, JUDI.to_array
+import JUDI.get_data, JUDI.judiVector, JUDI.convert
 
 
 function judiVector(con::H5SeisCon)
@@ -99,4 +99,4 @@ function get_data(x::judiVector{T, H5SeisCon}) where T
 end
 
 ##########################################################
-to_array(x::H5SeisCon) = convert(Array{Float32,2}, x[1].data)
+convert(::Type{Matrix{T}}, x::H5SeisCon) where T = convert(Matrix{T}, x[1].data)
