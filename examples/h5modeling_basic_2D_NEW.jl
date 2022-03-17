@@ -218,11 +218,39 @@ end
 
 # create H5SeisCon and judiVector from it
 con = H5SeisCon(seis=seis, pkey="SRCX")
-h5dobs = judiVector(con, xkey="GRPX", ykey="GRPY", zkey="RGE")
+# h5dobs = judiVector(con)
+
+# create H5GeometryOOC
+h5geo = pyimport("h5geopy._h5geo")
+if isnothing(h5geo)
+  @error "Unable to import h5geo"
+  return
+end
+recGeometry = H5GeometryOOC(h5geo=h5geo, container=con, key="receiver", 
+                            xkey="GRPX", ykey="GRPY", zkey="RGE", model_orientation=0)
+srcGeometry = H5GeometryOOC(h5geo=h5geo, container=con, key="source", 
+                            xkey="SRCX", ykey="SRCY", zkey="SES", model_orientation=0)
 
 # as long as SEGY stores coordinates in Int32 and h5geo stores it in Float64
 # we need to set previously calculated 'recGeometry' to prevent round off mismatch error (needed only for this example)
-h5dobs.geometry = recGeometry
+# h5dobs.geometry = recGeometry
+h5dobs = judiVector(recGeometry, con)
+
+# setup wavelet
+# f0 = 0.01f0     # kHz
+# wavelet = ricker_wavelet(timeS, dtS, f0)
+# q = judiVector(srcGeometry, wavelet)
+
+# Set up info structure for linear operators
+# ntComp = get_computational_nt(srcGeometry, recGeometry, model)
+# info = Info(prod(n), nsrc, ntComp)
+
+# Redefine operators with new geometries
+Pr = judiProjection(info, recGeometry)
+F = judiModeling(info, model; options=opt)
+F0 = judiModeling(info, model0; options=opt)
+Ps = judiProjection(info, srcGeometry)
+J = judiJacobian(Pr*F0*adjoint(Ps), q)
 
 ##################################################################################################
 
@@ -237,7 +265,7 @@ dD = J*dm
 # Adjoint jacobian
 rtm = adjoint(J)*dD
 
-# evaluate FWI objective function with h5dobs
+# # evaluate FWI objective function with h5dobs
 f, g = fwi_objective(model0, q, h5dobs; options=opt)
 
 imshow(g'); title("FWI (g')")
