@@ -6,8 +6,8 @@ function read_H5SeisCon(con::H5SeisCon, blocks::Array{Int,1})
     return
   end
 
-  if isnothing(con.pkey) || isnothing(con.xkey) || isnothing(con.ykey) || isnothing(con.zkey)
-    @error "pkey/xkey/ykey/zkey is Nothing"
+  if isnothing(con.pkey)
+    @error "pkey is Nothing"
     return
   end
 
@@ -39,8 +39,8 @@ end
 #     return
 #   end
 
-#   if isnothing(con.pkey) || isnothing(con.xkey) || isnothing(con.ykey) || isnothing(con.zkey)
-#     @error "pkey/xkey/ykey/zkey is Nothing"
+#   if isnothing(con.pkey)
+#     @error "pkey is Nothing"
 #     return
 #   end
 

@@ -2,20 +2,14 @@ import JUDI.split, JUDI.subsample
 
 export H5SeisCon
 
-struct H5SeisCon
+mutable struct H5SeisCon
   seis::PyCall.PyObject
-  xkey::String
-  ykey::String
-  zkey::String
   pkey::String
   pkeyvals::Array{Float64,1}
 end
 
 function H5SeisCon(;
   seis::PyCall.PyObject=nothing,
-  xkey::String="GRPX",
-  ykey::String="GRPY",
-  zkey::String="RGE",
   pkey::String="SP",
   pkeyvals=nothing)
   if isnothing(seis)
@@ -23,8 +17,8 @@ function H5SeisCon(;
     return
   end
 
-  if isnothing(pkey) || isnothing(xkey) || isnothing(ykey) || isnothing(zkey)
-    @error "pkey/xkey/ykey/zkey is Nothing"
+  if isnothing(pkey)
+    @error "pkey is Nothing"
     return
   end
 
@@ -32,7 +26,7 @@ function H5SeisCon(;
     pkeyvals = seis.getPKeyValues(pkey)
   end
 
-  return H5SeisCon(seis, xkey, ykey, zkey, pkey, pkeyvals)
+  return H5SeisCon(seis, pkey, pkeyvals)
 end
 
 size(con::H5SeisCon) = size(con.pkeyvals)
@@ -47,7 +41,7 @@ function getindex(con::H5SeisCon, a::Colon)
 end
 
 function split(s::H5SeisCon, inds::Union{Vector{Ti}, AbstractRange{Ti}}) where {Ti<:Integer}
-  return H5SeisCon(s.seis, s.xkey, s.ykey, s.zkey, s.pkey, view(s.pkeyvals, inds))
+  return H5SeisCon(s.seis, s.pkey, view(s.pkeyvals, inds))
 end
 
 split(s::H5SeisCon, inds::Integer) = split(s, [inds])

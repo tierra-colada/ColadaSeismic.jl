@@ -105,6 +105,8 @@ function h5read_segy(segy_files::Array{String})
     return
   end
 
+  seis.readSEGYTextHeader(segy_files[1])
+  seis.readSEGYBinHeader(segy_files[1])
   seis.readSEGYTraces(segy_files)
   seis.setLengthUnits("cm")
   seis.setTemporalUnits("microsecond")
@@ -216,11 +218,39 @@ end
 
 # create H5SeisCon and judiVector from it
 con = H5SeisCon(seis=seis, pkey="SRCX")
-h5dobs = judiVector(con)
+# h5dobs = judiVector(con)
+
+# create H5GeometryOOC
+h5geo = pyimport("h5geopy._h5geo")
+if isnothing(h5geo)
+  @error "Unable to import h5geo"
+  return
+end
+recGeometry = H5GeometryOOC(h5geo=h5geo, container=con, key="receiver", 
+                            xkey="GRPX", ykey="GRPY", zkey="RGE", model_orientation=0)
+srcGeometry = H5GeometryOOC(h5geo=h5geo, container=con, key="source", 
+                            xkey="SRCX", ykey="SRCY", zkey="SES", model_orientation=0)
 
 # as long as SEGY stores coordinates in Int32 and h5geo stores it in Float64
 # we need to set previously calculated 'recGeometry' to prevent round off mismatch error (needed only for this example)
-h5dobs.geometry = recGeometry
+# h5dobs.geometry = recGeometry
+h5dobs = judiVector(recGeometry, con)
+
+# setup wavelet
+# f0 = 0.01f0     # kHz
+# wavelet = ricker_wavelet(timeS, dtS, f0)
+# q = judiVector(srcGeometry, wavelet)
+
+# Set up info structure for linear operators
+# ntComp = get_computational_nt(srcGeometry, recGeometry, model)
+# info = Info(prod(n), nsrc, ntComp)
+
+# Redefine operators with new geometries
+Pr = judiProjection(info, recGeometry)
+F = judiModeling(info, model; options=opt)
+F0 = judiModeling(info, model0; options=opt)
+Ps = judiProjection(info, srcGeometry)
+J = judiJacobian(Pr*F0*adjoint(Ps), q)
 
 ##################################################################################################
 
@@ -235,35 +265,35 @@ dD = J*dm
 # Adjoint jacobian
 rtm = adjoint(J)*dD
 
-# evaluate FWI objective function with h5dobs
-f, g = fwi_objective(model0, q, h5dobs; options=opt)
+# # evaluate FWI objective function with h5dobs
+# f, g = fwi_objective(model0, q, h5dobs; options=opt)
 
-imshow(g'); title("FWI (g')")
-savefig(segy_path * "/g.png")
+# imshow(g'); title("FWI (g')")
+# savefig(segy_path * "/g.png")
 
-# TWRI with h5dobs
-f, gm, gy = twri_objective(model0, q, h5dobs, nothing; options=opt, optionswri=TWRIOptions(params=:all))
-f, gm = twri_objective(model0, q, h5dobs, nothing; options=Options(frequencies=[[.009, .011], [.008, .012]]),
-                                                 optionswri=TWRIOptions(params=:m))
+# # TWRI with h5dobs
+# f, gm, gy = twri_objective(model0, q, h5dobs, nothing; options=opt, optionswri=TWRIOptions(params=:all))
+# f, gm = twri_objective(model0, q, h5dobs, nothing; options=Options(frequencies=[[.009, .011], [.008, .012]]),
+#                                                  optionswri=TWRIOptions(params=:m))
 
-imshow(gm'); title("TWRI (gm')")
-savefig(segy_path * "/gm.png")
+# imshow(gm'); title("TWRI (gm')")
+# savefig(segy_path * "/gm.png")
 
-# evaluate LSRTM objective function with h5dobs
-fj, gj = lsrtm_objective(model0, q, dD, dm; options=opt)
-fjn, gjn = lsrtm_objective(model0, q, h5dobs, dm; nlind=true, options=opt)
+# # evaluate LSRTM objective function with h5dobs
+# fj, gj = lsrtm_objective(model0, q, dD, dm; options=opt)
+# fjn, gjn = lsrtm_objective(model0, q, h5dobs, dm; nlind=true, options=opt)
 
-imshow(gj'); title("LSRTM (gj')")
-savefig(segy_path * "/gj.png")
-imshow(gjn'); title("LSRTM (gjn')")
-savefig(segy_path * "/gjn.png")
+# imshow(gj'); title("LSRTM (gj')")
+# savefig(segy_path * "/gj.png")
+# imshow(gjn'); title("LSRTM (gjn')")
+# savefig(segy_path * "/gjn.png")
 
-# By extension, lsrtm_objective is the same as fwi_objecive when `dm` is zero
-# And with computing of the residual. Small noise can be seen in the difference
-# due to floating point roundoff errors with openMP, but running with 
-# OMP_NUM_THREAS=1 (no parllelism) produces the exact (difference == 0) same result
-# gjn2 == g
-fjn2, gjn2 = lsrtm_objective(model0, q, h5dobs, 0f0.*dm; nlind=true, options=opt)
+# # By extension, lsrtm_objective is the same as fwi_objecive when `dm` is zero
+# # And with computing of the residual. Small noise can be seen in the difference
+# # due to floating point roundoff errors with openMP, but running with 
+# # OMP_NUM_THREAS=1 (no parllelism) produces the exact (difference == 0) same result
+# # gjn2 == g
+# fjn2, gjn2 = lsrtm_objective(model0, q, h5dobs, 0f0.*dm; nlind=true, options=opt)
 
-imshow(gjn2'); title("LSRTM (gjn2')")
-savefig(segy_path * "/gjn2.png")
+# imshow(gjn2'); title("LSRTM (gjn2')")
+# savefig(segy_path * "/gjn2.png")
