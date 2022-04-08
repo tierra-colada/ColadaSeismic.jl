@@ -9,6 +9,9 @@ mutable struct H5GeometryOOC <: Geometry{Float32}
 	xkey::String
 	ykey::String
 	zkey::String
+  do_coord_transform::Bool
+  model_origin_x::Number
+  model_origin_y::Number
 	model_orientation::Number
 end
 
@@ -19,6 +22,9 @@ function H5GeometryOOC(;
   xkey::String,
   ykey::String,
   zkey::String,
+  do_coord_transform::Bool,
+  model_origin_x::Number,
+  model_origin_y::Number,
   model_orientation::Number)
   if isnothing(container)
     @error "H5SeisCon is Nothing"
@@ -40,7 +46,7 @@ function H5GeometryOOC(;
     return
   end
 
-  return H5GeometryOOC(h5geo, container, key, xkey, ykey, zkey, model_orientation)
+  return H5GeometryOOC(h5geo, container, key, xkey, ykey, zkey, do_coord_transform, model_origin_x, model_origin_y, model_orientation)
 end
 
 ######################## shapes easy access ################################
@@ -66,6 +72,9 @@ function subsample(geometry::H5GeometryOOC, srcnum)
   con.pkeyvals = [con.pkeyvals[srcnum]]
   return H5GeometryOOC(h5geo=geometry.h5geo, container=con, key=geometry.key,
                       xkey=geometry.xkey, ykey=geometry.ykey, zkey=geometry.zkey, 
+                      do_coord_transform=geometry.do_coord_transform,
+                      model_origin_x=geometry.model_origin_x,
+                      model_origin_y=geometry.model_origin_y,
                       model_orientation=geometry.model_orientation)
 end
 
@@ -146,7 +155,13 @@ function Geometry(geometry::H5GeometryOOC)
       ind = [ind[1]]
     end
     xy = Float32.(geometry.container.seis.getXYTraceHeaders(
-      [geometry.xkey, geometry.ykey], ind, "m", false))  # MUST BE TRUE
+      [geometry.xkey, geometry.ykey], ind, "m", geometry.do_coord_transform))  # MUST BE TRUE
+
+    xy[:,1] = xy[:,1] .- geometry.model_origin_x
+    xy[:,2] = xy[:,2] .- geometry.model_origin_y
+    xy = rotate_Nx2_array(xy, -geometry.model_orientation)
+    xy[:,1] = xy[:,1] .+ geometry.model_origin_x
+    xy[:,2] = xy[:,2] .+ geometry.model_origin_y
 
     xCell[block] = xy[:,1]
     yCell[block] = xy[:,2]
@@ -160,7 +175,8 @@ function Geometry(geometry::H5GeometryOOC)
   return GeometryIC{Float32}(xCell, yCell, zCell, dtCell, ntCell, tCell)
 end
 
-function Geometry(con::H5SeisCon; xkey::String, ykey::String, zkey::String)
+function Geometry(con::H5SeisCon; xkey::String, ykey::String, zkey::String, do_coord_transform::Bool,
+                  model_origin_x::Number, model_origin_y::Number, model_orientation::Number)
   if isnothing(con.seis)
     @error "Seis is Nothing"
     return
@@ -192,7 +208,13 @@ function Geometry(con::H5SeisCon; xkey::String, ykey::String, zkey::String)
     minlist = [con.pkeyvals[block]]
     maxlist = [con.pkeyvals[block]]
     _, _, ind = con.seis.getSortedData(keylist, minlist, maxlist, 0, 0)
-    xy = Float32.(con.seis.getXYTraceHeaders([xkey, ykey], ind, "m", false))  # MUST BE TRUE
+    xy = Float32.(con.seis.getXYTraceHeaders([xkey, ykey], ind, "m", do_coord_transform))  # MUST BE TRUE
+
+    xy[:,1] = xy[:,1] .- model_origin_x
+    xy[:,2] = xy[:,2] .- model_origin_y
+    xy = rotate_Nx2_array(xy, -model_orientation)
+    xy[:,1] = xy[:,1] .+ model_origin_x
+    xy[:,2] = xy[:,2] .+ model_origin_y
 
     xCell[block] = xy[:,1]
     yCell[block] = xy[:,2]

@@ -1,21 +1,17 @@
 # operation_type: Forward Modeling, RTM, FWI, TWRI
 function H5Modeling(;
   # models
-  h5vel::PyCall.PyObject,
-  h5density::PyCall.PyObject=nothing,
-  h5epsilon::PyCall.PyObject=nothing,
-  h5delta::PyCall.PyObject=nothing,
-  h5tetha::PyCall.PyObject=nothing,
-  h5phi::PyCall.PyObject=nothing,
+  h5vel,
+  h5density=nothing,
+  h5epsilon=nothing,
+  h5delta=nothing,
+  h5tetha=nothing,
+  h5phi=nothing,
   model_xkey::String="CDP_X",
   model_ykey::String="CDP_Y",
 
   # geometry
-  h5geom::PyCall.PyObject=nothing,
-  geom_segy_files::Array{String,1}=nothing,
-  geom_length_units::String,
-  geom_temporal_units::String,
-  geom_crs::String,
+  h5geom=nothing,
   geom_src_xkey::String,
   geom_src_ykey::String,
   geom_src_zkey::String,
@@ -109,76 +105,30 @@ function H5Modeling(;
           theta=phptheta.data, phi=phpphi.data)
 
   # Geometry
-  if isnothing(h5geom) && isnothing(geom_segy_files)
-    @error "Neither geometry H5Seis nor SEGY files were provided"
+  if isnothing(h5geom)
+    @error "Geometry H5Seis is NULL"
     return
   end
 
-  if !isnothing(geom_segy_files)
-    geom_rec_xkey_judi = h5geo2judiTraceHeaderName(geom_rec_xkey)
-    if isnothing(geom_rec_xkey_judi)
-      @error "Unable to map h5geo trace header: $geom_rec_xkey to judi"
-      return
-    end
-    geom_rec_ykey_judi = h5geo2judiTraceHeaderName(geom_rec_ykey)
-    if isnothing(geom_rec_ykey_judi)
-      @error "Unable to map h5geo trace header: $geom_rec_ykey to judi"
-      return
-    end
-    geom_rec_zkey_judi = h5geo2judiTraceHeaderName(geom_rec_zkey)
-    if isnothing(geom_rec_zkey_judi)
-      @error "Unable to map h5geo trace header: $geom_rec_zkey to judi"
-      return
-    end
-    geom_src_zkey_judi = h5geo2judiTraceHeaderName(geom_src_zkey)
-    if isnothing(geom_src_zkey_judi)
-      @error "Unable to map h5geo trace header: $geom_src_zkey to judi"
-      return
-    end
-    # before using there mapped keys I need to modify JUDI Geometry.jl to allow to use custom headers
-    container = segy_scan(geom_segy_files, ["GroupX", "GroupY", "RecGroupElevation", "SourceSurfaceElevation", "dt"])
-    d_obs = judiVector(container)
-    d_obs.geometry.h5geo = h5geo
-    d_obs.geometry.crs = geom_crs
-    d_obs.geometry.lengthUnits = geom_length_units
-    d_obs.geometry.temporalUnits = geom_temporal_units
-    d_obs.geometry.model_origin_x = model.o[1]
-    d_obs.geometry.model_origin_y = model.o[2]
-    d_obs.geometry.model_orientation = model_orientation
-    recGeometry = d_obs.geometry
+  con = H5SeisCon(seis=h5geom, pkey=geom_src_xkey)
+  recGeometry = H5GeometryOOC(h5geo=h5geo, container=con, key="receiver", 
+                    xkey=geom_rec_xkey, ykey=geom_rec_ykey, zkey=geom_rec_zkey, 
+                    do_coord_transform=true, model_x_origin=0, model_y_origin=0, model_orientation=0)
+  srcGeometry = H5GeometryOOC(h5geo=h5geo, container=con, key="source", 
+                    xkey=geom_src_xkey, ykey=geom_src_ykey, zkey=geom_src_zkey, 
+                    do_coord_transform=false, model_x_origin=0, model_y_origin=0, model_orientation=0)
 
-    # set up source
-    srcGeometry = Geometry(container; key = "source")
-    srcGeometry.h5geo = h5geo
-    srcGeometry.crs = geom_crs
-    srcGeometry.lengthUnits = geom_length_units
-    srcGeometry.temporalUnits = geom_temporal_units
-    srcGeometry.model_origin_x = model.o[1]
-    srcGeometry.model_origin_y = model.o[2]
-    srcGeometry.model_orientation = model_orientation
-  else
-    dt = h5geom.getSampRate("ms")
-    nt = h5geom.getNSamp()
-    srcGeometry, recGeometry, indCellVec = H5ReadGeometry(
-      h5geom,
-      src_xkey=geom_src_xkey,
-      src_ykey=geom_src_ykey,
-      src_zkey=geom_src_zkey,
-      rec_xkey=geom_rec_xkey,
-      rec_ykey=geom_rec_ykey,
-      rec_zkey=geom_rec_zkey,
-      src_dt=dt,
-      src_nt=nt,
-      rec_dt=dt,
-      rec_nt=nt)
-    if isnothing(srcGeometry) || isnothing(srcGeometry) || isnothing(indCellVec)
-      @error "Unable to prepare Source and Receiver JUDI Geometry objects from H5Seis"
-      return
-    end
+  if isnothing(srcGeometry) || isnothing(srcGeometry)
+    @error "Unable to prepare Source and Receiver JUDI Geometry objects from H5Seis"
+    return
   end
 
+  dt = h5geom.getSampRate("ms")
+  nt = h5geom.getNSamp()
+  t = dt*(nt-1)
+
   # setup wavelet
-  wavelet = ricker_wavelet(srcGeometry.t[1], srcGeometry.dt[1], src_frq)
+  wavelet = ricker_wavelet(t, dt, src_frq)
   q = judiVector(srcGeometry, wavelet)
 
   if computation_type == "Forward Modeling"

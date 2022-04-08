@@ -174,13 +174,13 @@ segy_path = @__DIR__
 segy_path *= "/tmp/"
 segy_name = "shot"
 
-# rm(segy_path, force=true, recursive=true)
-# mkpath(segy_path)
+rm(segy_path, force=true, recursive=true)
+mkpath(segy_path)
 
 # Write shots as segy files to disk (gives error in 'time-tests' branch)
-# opt = Options(optimal_checkpointing=false, isic=false, subsampling_factor=2, dt_comp=1.0,
-#               save_data_to_disk=true, file_path=segy_path, file_name=segy_name)
-opt = Options(optimal_checkpointing=false, isic=false, subsampling_factor=2, dt_comp=1.0)
+opt = Options(optimal_checkpointing=false, isic=false, subsampling_factor=2, dt_comp=1.0,
+              save_data_to_disk=true, file_path=segy_path, file_name=segy_name)
+# opt = Options(optimal_checkpointing=false, isic=false, subsampling_factor=2, dt_comp=1.0)
 
 # Setup operators
 Pr = judiProjection(info, recGeometry)
@@ -216,34 +216,36 @@ if !seis.hasPKeySort("SRCX")
   seis.addPKeySort("SRCX")
 end
 
-# create H5SeisCon and judiVector from it
-con = H5SeisCon(seis=seis, pkey="SRCX")
-# h5dobs = judiVector(con)
-
 # create H5GeometryOOC
 h5geo = pyimport("h5geopy._h5geo")
 if isnothing(h5geo)
   @error "Unable to import h5geo"
   return
 end
+
+# create H5SeisCon and judiVector from it
+con = H5SeisCon(seis=seis, pkey="SRCX")
+
 recGeometry = H5GeometryOOC(h5geo=h5geo, container=con, key="receiver", 
-                            xkey="GRPX", ykey="GRPY", zkey="RGE", model_orientation=0)
+                            xkey="GRPX", ykey="GRPY", zkey="RGE", do_coord_transform=false, model_x_origin=0, model_y_origin=0, model_orientation=0)
 srcGeometry = H5GeometryOOC(h5geo=h5geo, container=con, key="source", 
-                            xkey="SRCX", ykey="SRCY", zkey="SES", model_orientation=0)
+                            xkey="SRCX", ykey="SRCY", zkey="SES", do_coord_transform=false, model_x_origin=0, model_y_origin=0, model_orientation=0)
+
+h5dobs = judiVector(recGeometry, con)
 
 # as long as SEGY stores coordinates in Int32 and h5geo stores it in Float64
 # we need to set previously calculated 'recGeometry' to prevent round off mismatch error (needed only for this example)
 # h5dobs.geometry = recGeometry
-h5dobs = judiVector(recGeometry, con)
+# h5dobs = judiVector(recGeometry, con)
 
 # setup wavelet
-# f0 = 0.01f0     # kHz
-# wavelet = ricker_wavelet(timeS, dtS, f0)
-# q = judiVector(srcGeometry, wavelet)
+f0 = 0.01f0     # kHz
+wavelet = ricker_wavelet(timeS, dtS, f0)
+q = judiVector(srcGeometry, wavelet)
 
 # Set up info structure for linear operators
-# ntComp = get_computational_nt(srcGeometry, recGeometry, model)
-# info = Info(prod(n), nsrc, ntComp)
+ntComp = get_computational_nt(srcGeometry, recGeometry, model)
+info = Info(prod(n), nsrc, ntComp)
 
 # Redefine operators with new geometries
 Pr = judiProjection(info, recGeometry)
