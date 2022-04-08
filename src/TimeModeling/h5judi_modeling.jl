@@ -21,7 +21,7 @@ function H5Modeling(;
 
   # judi
   opt::JUDI.Options,
-  src_frq::Float32=0.01f0,
+  src_frq::Number,
 
   # FWI constraints
   vmin::Number,
