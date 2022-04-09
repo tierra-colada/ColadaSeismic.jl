@@ -4,7 +4,7 @@ function H5ForwardModeling(;
   q::JUDI.judiVector,
   recGeometry)
 
-  nsrc = length(q.geometry.xloc)
+  nsrc = length(q.geometry.container)
 
   # Set up info structure for linear operators
   ntComp = get_computational_nt(q.geometry, recGeometry, model)

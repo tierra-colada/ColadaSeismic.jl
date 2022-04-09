@@ -1,3 +1,12 @@
+@enum H5PhPType begin
+  VELOCITY = 1
+  DENSITY = 2
+  EPSILON = 3
+  DELTA = 4
+  THETA = 5
+  PHI = 6
+end
+
 function rotate_Nx2_array(arr, ϕ)
   return arr * [cos(ϕ) -sin(ϕ); sin(ϕ) cos(ϕ)]
 end

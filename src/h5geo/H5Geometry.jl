@@ -136,7 +136,7 @@ function Geometry(geometry::H5GeometryOOC)
   nt = Integer(geometry.container.seis.getNSamp())
   t = Float32((nt-1)*dt)
 
-  nsrc = length(geometry.container.pkeyvals)
+  nsrc = length(geometry.container)
   xCell = Vector{Vector{Float32}}(undef, nsrc)
   yCell = Vector{Vector{Float32}}(undef, nsrc)
   zCell = Vector{Vector{Float32}}(undef, nsrc)

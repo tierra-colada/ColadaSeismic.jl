@@ -47,7 +47,7 @@ function H5Modeling(;
     return
   end
 
-  phpvel, model_orientation = H5ReadPhysicalParameter3D(
+  phpvel, model_orientation = H5ReadPhysicalParameter(
     h5vel, phptype=VELOCITY, xkey=model_xkey, ykey=model_ykey)
   if isnothing(phpvel)
     @error "Unable to read PhysicalParameter: VELOCITY"
@@ -55,8 +55,15 @@ function H5Modeling(;
   end
   model = JUDI.Model(phpvel.n, phpvel.d, phpvel.o, phpvel.data)
 
+  # declare PHP vars to be able use thm as arguments (or unknown var error will appear)
+  phpdensity = nothing
+  phpepsilon = nothing
+  phpdelta = nothing
+  phptheta = nothing
+  phpphi = nothing
+
   if !isnothing(h5density)
-    phpdensity, model_orientation = H5ReadPhysicalParameter3D(
+    phpdensity, model_orientation = H5ReadPhysicalParameter(
       h5density, phptype=DENSITY, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpdensity)
       @error "Unable to read PhysicalParameter: DENSITY"
@@ -65,7 +72,7 @@ function H5Modeling(;
   end
 
   if !isnothing(h5epsilon)
-    phpepsilon, model_orientation = H5ReadPhysicalParameter3D(
+    phpepsilon, model_orientation = H5ReadPhysicalParameter(
       h5epsilon, phptype=EPSILON, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpepsilon)
       @error "Unable to read PhysicalParameter: EPSILON"
@@ -74,7 +81,7 @@ function H5Modeling(;
   end
 
   if !isnothing(h5delta)
-    phpdelta, model_orientation = H5ReadPhysicalParameter3D(
+    phpdelta, model_orientation = H5ReadPhysicalParameter(
       h5delta, phptype=DELTA, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpdelta)
       @error "Unable to read PhysicalParameter: DELTA"
@@ -83,7 +90,7 @@ function H5Modeling(;
   end
 
   if !isnothing(h5tetha)
-    phptheta, model_orientation = H5ReadPhysicalParameter3D(
+    phptheta, model_orientation = H5ReadPhysicalParameter(
       h5tetha, phptype=THETA, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phptheta)
       @error "Unable to read PhysicalParameter: THETA"
@@ -92,7 +99,7 @@ function H5Modeling(;
   end
 
   if !isnothing(h5phi)
-    phpphi, model_orientation = H5ReadPhysicalParameter3D(
+    phpphi, model_orientation = H5ReadPhysicalParameter(
       h5phi, phptype=PHI, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpphi)
       @error "Unable to read PhysicalParameter: PHI"
@@ -101,8 +108,11 @@ function H5Modeling(;
   end
 
   model = JUDI.Model(phpvel.n, phpvel.d, phpvel.o, phpvel.data, 
-          rho=phpdensity.data, epsilon=phpepsilon.data, delta=phpdelta.data, 
-          theta=phptheta.data, phi=phpphi.data)
+          rho=isnothing(phpdensity) ? nothing : phpdensity.data, 
+          epsilon=isnothing(phpepsilon) ? nothing : phpepsilon.data, 
+          delta=isnothing(phpdelta) ? nothing : phpdelta.data, 
+          theta=isnothing(phptheta) ? nothing : phptheta.data, 
+          phi=isnothing(phpphi) ? nothing : phpphi.data)
 
   # Geometry
   if isnothing(h5geom)
@@ -110,18 +120,43 @@ function H5Modeling(;
     return
   end
 
+  model_origin_x = model.o[1]
+  model_origin_y = 0
+  if length(model.o) == 3
+    model_origin_y = model.o[2]
+  end
+
   con = H5SeisCon(seis=h5geom, pkey=geom_src_xkey)
-  recGeometry = H5GeometryOOC(h5geo=h5geo, container=con, key="receiver", 
-                    xkey=geom_rec_xkey, ykey=geom_rec_ykey, zkey=geom_rec_zkey, 
-                    do_coord_transform=true, model_x_origin=0, model_y_origin=0, model_orientation=0)
-  srcGeometry = H5GeometryOOC(h5geo=h5geo, container=con, key="source", 
-                    xkey=geom_src_xkey, ykey=geom_src_ykey, zkey=geom_src_zkey, 
-                    do_coord_transform=false, model_x_origin=0, model_y_origin=0, model_orientation=0)
+  recGeometry = H5GeometryOOC(
+    h5geo=h5geo, 
+    container=con, 
+    key="receiver", 
+    xkey=geom_rec_xkey, 
+    ykey=geom_rec_ykey, 
+    zkey=geom_rec_zkey, 
+    do_coord_transform=true, 
+    model_origin_x=model_origin_x, 
+    model_origin_y=model_origin_y, 
+    model_orientation=model_orientation)
+  srcGeometry = H5GeometryOOC(
+    h5geo=h5geo, 
+    container=con, 
+    key="source", 
+    xkey=geom_src_xkey, 
+    ykey=geom_src_ykey, 
+    zkey=geom_src_zkey, 
+    do_coord_transform=false, 
+    model_origin_x=model_origin_x, 
+    model_origin_y=model_origin_y, 
+    model_orientation=model_orientation)
 
   if isnothing(srcGeometry) || isnothing(srcGeometry)
     @error "Unable to prepare Source and Receiver JUDI Geometry objects from H5Seis"
     return
   end
+
+  # in case computation type is RTM/FWI dobs is observed data
+  dobs = judiVector(recGeometry, con)
 
   dt = h5geom.getSampRate("ms")
   nt = h5geom.getNSamp()

@@ -1,16 +1,17 @@
 function H5ReadPhysicalParameter2D(
   h5obj::PyCall.PyObject;
-  h5opt::H5PhPOptions)
+  phptype::H5PhPType,
+  xkey::String)
 
   h5geo = pyimport("h5geopy._h5geo")
 
-  if h5opt.phptype == VELOCITY 
+  if phptype == VELOCITY 
     php = transpose(h5obj.getTrace(0, typemax(Int), 0, typemax(Int), "km/s"))
     # Slowness squared [s^2/km^2]
     php = (1f0 ./ php).^2
-  elseif h5opt.phptype == DENSITY
+  elseif phptype == DENSITY
     php = transpose(h5obj.getTrace(0, typemax(Int), 0, typemax(Int), "g/cm^3"))
-  elseif h5opt.phptype == THETA || h5opt.phptype == PHI
+  elseif phptype == THETA || phptype == PHI
     php = transpose(h5obj.getTrace(0, typemax(Int), 0, typemax(Int), "rad"))
   else
     php = transpose(h5obj.getTrace(0, typemax(Int), 0, typemax(Int)))
@@ -26,9 +27,9 @@ function H5ReadPhysicalParameter2D(
     return
   end
   
-  x = h5obj.getTraceHeader(h5opt.xkey, 0, typemax(Int), h5obj.getLengthUnits(), "m")
+  x = h5obj.getTraceHeader(xkey, 0, typemax(Int), h5obj.getLengthUnits(), "m")
   if length(x) < 2
-    @error "$(h5opt.xkey) can't have less than 2 points"
+    @error "$(xkey) can't have less than 2 points"
     return
   end
   
@@ -41,7 +42,7 @@ function H5ReadPhysicalParameter2D(
   d = (abs(h5obj.getSampRate("m")), x[2]-x[1])
   o = (x[1], h5obj.getSRD("m") * (-1))
   
-  return JUDI.PhysicalParameter(php, n, d, o;)
+  return JUDI.PhysicalParameter(php, n, d, o;), 0   # the second parameter is the orientation
 end
 
 
@@ -147,10 +148,17 @@ function H5ReadPhysicalParameter3D(
 
   h5geo = pyimport("h5geopy._h5geo")
 
+  @info "H5ReadPhysicalParameter3D STARTED WOWWWWWWW"
+
   keylist = ["INLINE", "XLINE"]
   minlist = [-Inf, -Inf]
   maxlist = [Inf, Inf]
+  if !h5obj.hasPKeySort(keylist[1])
+    h5obj.addPKeySort(keylist[1])
+  end
+  
   if phptype == VELOCITY 
+    @info "Trying to read Velocity"
     php, il_xl, ind = h5obj.getSortedData(keylist, minlist, maxlist, 0, typemax(Int), true, "km/s")
     php = (1f0 ./ php).^2
   elseif phptype == DENSITY
@@ -254,5 +262,24 @@ function H5ReadPhysicalParameter3D(
   d = (dx, dy, abs(h5obj.getSampRate("m")))
   o = (origin[1], origin[2], h5obj.getSRD("m") * (-1))
   
-  return JUDI.PhysicalParameter(php, n, d, o)
+  return JUDI.PhysicalParameter(php, n, d, o), orientation
+end
+
+
+function H5ReadPhysicalParameter(
+  h5obj::PyCall.PyObject;
+  phptype::H5PhPType,
+  xkey::String,
+  ykey::String)
+
+  h5geo = pyimport("h5geopy._h5geo")
+
+  if h5obj.getSurveyType() == h5geo.SurveyType.TWO_D
+    return H5ReadPhysicalParameter2D(h5obj, phptype=phptype, xkey=xkey)
+  elseif h5obj.getSurveyType() == h5geo.SurveyType.THREE_D
+    return H5ReadPhysicalParameter3D(h5obj, phptype=phptype, xkey=xkey, ykey=ykey)
+  else 
+    @error "H5Object is neither TWO_D nor THREE_D"
+    return
+  end
 end
