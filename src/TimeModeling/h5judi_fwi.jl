@@ -2,12 +2,14 @@
 function H5FWI(;
   model::JUDI.Model,
   opt::JUDI.Options,
-  q::JUDI.judiVector, 
+  q::JUDI.judiVector,
   dobs::JUDI.judiVector,
   niterations::Int,
   batchsize::Int,
   vmin::Number,
   vmax::Number)
+
+  h5geo = pyimport("h5geopy._h5geo")
   
   # Bound constraints: Slowness squared [s^2/km^2]
   mmin = vec(ones(Float32, model.n) .* (1f0 / vmax)^2)
@@ -27,34 +29,44 @@ function H5FWI(;
     return
   end
 
-  fhistory_SGD = zeros(Float32, niterations)
-
-  # Projection operator for bound constraints
-  proj(x) = reshape(median([vec(mmin) vec(x) vec(mmax)]; dims=length(model.n)), model.n)
-  ls = BackTracking(order=3, iterations=10, )
-
-  # Main loop
-  for j=1:niterations
-    # get fwi objective function value and gradient
-    i = randperm(dobs.nsrc)[1:batchsize]
-    fval, gradient = fwi_objective(model, q[i], dobs[i])
-    p = -gradient/norm(gradient, Inf)
-    
-    println("FWI iteration no: ",j,"; function value: ",fval)
-    fhistory_SGD[j] = fval
-
-    # linesearch
-    function ϕ(α)
-      F.model.m .= proj(model.m .+ α * p)
-      misfit = .5*norm(F[i]*q[i] - dobs[i])^2
-      @show α, misfit
-      return misfit
-    end
-    step, fval = ls(ϕ, 1f-1, fval, dot(gradient, p))
-
-    # Update model and bound projection
-    model.m .= proj(model.m .+ step .* p)
+  # Prevent to access out of boundary elements
+  if batchsize > dobs.nsrc
+    batchsize = dobs.nsrc
   end
 
-  figure(); imshow(sqrt.(1f0./adjoint(model.m))); title("FWI with SGD")
+  # NLopt objective function
+  println("No.  ", "fval         ", "norm(gradient)")
+  function f!(x,grad)
+
+      # Update model
+      model.m .= convert(Array{Float32, 2}, reshape(x, model.n))
+
+      # Seclect batch and calculate gradient
+      i = randperm(dobs.nsrc)[1:batchsize]
+      fval, gradient = fwi_objective(model, q[i], dobs[i])
+
+      # Reset gradient in water column to zero
+      gradient = reshape(gradient, model.n)
+      gradient[:, 1:21] .= 0f0
+      grad[1:end] = vec(gradient)
+
+      global count; count += 1
+      println(count, "    ", fval, "    ", norm(grad))
+      return convert(Float64, fval)
+  end
+
+  # Optimization parameters
+  nlopt = Opt(:LD_LBFGS, prod(model.n))
+  lower_bounds!(nlopt, mmin); upper_bounds!(nlopt, mmax)
+  min_objective!(nlopt, f!)
+  maxeval!(nlopt, parse(Int, get(ENV, "NITER", "10")))
+  (minf, minx, ret) = optimize(nlopt, vec(model.m.data))
+
+  H5WritePhysicalParameter(
+    cntName="$(opt.file_path)/fwi.h5",
+    objName="fwi",
+    cntCreationType=h5geo.CreationType.OPEN_OR_CREATE,
+    objCreationType=h5geo.CreationType.CREATE_UNDER_NEW_NAME,
+    php=sqrt.(1f0./model.m)
+  )
 end

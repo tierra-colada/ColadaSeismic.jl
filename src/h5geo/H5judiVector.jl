@@ -1,4 +1,5 @@
 import JUDI.get_data, JUDI.judiVector, JUDI.convert
+import Base.vec
 
 
 function judiVector(con::H5SeisCon; xkey::String, ykey::String, zkey::String)

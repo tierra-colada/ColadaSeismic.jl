@@ -47,3 +47,5 @@ end
 split(s::H5SeisCon, inds::Integer) = split(s, [inds])
 
 subsample(a::Array{H5SeisCon,1}, i::Int64) = a[i]
+
+iterate(S::H5SeisCon, state::Integer=1) = state > length(S) ? nothing : (S[state], state+1)

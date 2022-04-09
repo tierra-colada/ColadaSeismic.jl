@@ -46,100 +46,6 @@ function H5ReadPhysicalParameter2D(
 end
 
 
-function H5WritePhysicalParameter(;
-  cntName::String,
-  objName::String,
-  cntCreationType::PyCall.PyObject,
-  objCreationType::PyCall.PyObject,
-  php::JUDI.PhysicalParameter)
-
-  if isnothing(cntName) || length(cntName) < 1
-    @error "Container name is empty"
-    return
-  end
-
-  if isnothing(objName) || length(objName) < 1
-    @error "Object name is empty"
-    return
-  end
-
-  if isnothing(php) || length(php.data) < 1
-    @error "PhysicalParameter is empty"
-    return
-  end
-
-  colada = pyimport("colada")
-  h5geo = pyimport("h5geopy._h5geo")
-
-  cnt = h5geo.createSeisContainerByName(cntName, cntCreationType)
-  if isnothing(cnt)
-    @error "Unable to create SeisContainer: $cntName"
-    return
-  end
-
-  authName = colada.Util().CRSAuthName()
-  authCode = string(colada.Util().CRSCode())
-
-  p = h5geo.SeisParam()
-  p.spatialReference = "$authName:$authCode"
-  p.lengthUnits = colada.Util().lengthUnits()
-  p.temporalUnits = colada.Util().timeUnits()
-  p.Domain = h5geo.Domain.TVD
-  p.SeisDataType = h5geo.SeisDataType.STACK
-
-  dims = length(size(php.data))
-  TRACE = Matrix{Float32}
-  x0 = 0.0; y0 = 0.0; z0 = 0.0
-  dx = 0.0; dy = 0.0; dz = 0.0
-  nx = 1; ny = 1; nz = 1
-  if dims == 2
-    p.SurveyType = h5geo.SurveyType.TWO_D
-    x0 = php.o[1]; z0 = -php.o[2]
-    dx = php.d[1]; dz = php.d[2]
-    nx = php.n[1]; nz = php.n[2]
-    nTrc = nx
-    nSamp = nz
-    TRACE = permutedims(p.data, (2,1))
-  elseif dims == 3
-    p.SurveyType = h5geo.SurveyType.THREE_D
-    x0 = php.o[1]; y0 = php.o[2]; z0 = -php.o[3]
-    dx = php.d[1]; dy = php.d[2]; dz = php.d[3]
-    nx = php.n[1]; ny = php.n[2]; nz = php.n[3]
-    nTrc = nx*ny
-    nSamp = nz
-    TRACE = reshape(permutedims(p.data, (3,2,1)), (nz, nx*ny))
-  else
-    @error "PhysicalParameter dimensions is neither 2D or 3D"
-    return
-  end
-    
-  if nTrc < 1000
-    p.trcChunk = nTrc
-  else 
-    p.trcChunk = 1000
-  end
-
-  seis = cnt.createSeis(objName, p, objCreationType)
-  if isnothing(seis)
-    @error "Unable to create Seis: $objName"
-    return
-  end
-
-  val = seis.generateSTKGeometry(x0, dx, nx, y0, dy, ny, z0)
-  if isnothing(val)
-    @error "Unable to create generate STK geometry for Seis: $objName"
-    return
-  end
-
-  val = seis.writeTrace(TRACE)
-  if isnothing(val)
-    @error "Unable to write traces: $objName"
-    return
-  end
-end
-
-
-
 function H5ReadPhysicalParameter3D(
   h5obj::PyCall.PyObject;
   phptype::H5PhPType,
@@ -147,8 +53,6 @@ function H5ReadPhysicalParameter3D(
   ykey::String)
 
   h5geo = pyimport("h5geopy._h5geo")
-
-  @info "H5ReadPhysicalParameter3D STARTED WOWWWWWWW"
 
   keylist = ["INLINE", "XLINE"]
   minlist = [-Inf, -Inf]
@@ -158,7 +62,6 @@ function H5ReadPhysicalParameter3D(
   end
   
   if phptype == VELOCITY 
-    @info "Trying to read Velocity"
     php, il_xl, ind = h5obj.getSortedData(keylist, minlist, maxlist, 0, typemax(Int), true, "km/s")
     php = (1f0 ./ php).^2
   elseif phptype == DENSITY
@@ -282,4 +185,102 @@ function H5ReadPhysicalParameter(
     @error "H5Object is neither TWO_D nor THREE_D"
     return
   end
+end
+
+
+function H5WritePhysicalParameter(;
+  cntName::String,
+  objName::String,
+  cntCreationType::PyCall.PyObject,
+  objCreationType::PyCall.PyObject,
+  php::JUDI.PhysicalParameter)
+
+  if isnothing(cntName) || length(cntName) < 1
+    @error "Container name is empty"
+    return
+  end
+
+  if isnothing(objName) || length(objName) < 1
+    @error "Object name is empty"
+    return
+  end
+
+  if isnothing(php) || length(php.data) < 1
+    @error "PhysicalParameter is empty"
+    return
+  end
+
+  colada = pyimport("colada")
+  h5geo = pyimport("h5geopy._h5geo")
+
+  cnt = h5geo.createSeisContainerByName(cntName, cntCreationType)
+  if isnothing(cnt)
+    @error "Unable to create SeisContainer: $cntName"
+    return
+  end
+
+  authName = colada.Util().CRSAuthName()
+  authCode = string(colada.Util().CRSCode())
+
+  p = h5geo.SeisParam()
+  p.spatialReference = "$authName:$authCode"
+  p.lengthUnits = colada.Util().lengthUnits()
+  p.temporalUnits = colada.Util().timeUnits()
+  p.domain = h5geo.Domain.TVD
+  p.dataType = h5geo.SeisDataType.STACK
+
+  dims = length(size(php.data))
+  TRACE = Matrix{Float32}
+  x0 = 0.0; y0 = 0.0; z0 = 0.0
+  dx = 0.0; dy = 0.0; dz = 0.0
+  nx = 1; ny = 1; nz = 1
+  if dims == 2
+    p.surveyType = h5geo.SurveyType.TWO_D
+    x0 = php.o[1]; z0 = -php.o[2]
+    dx = php.d[1]; dz = php.d[2]
+    nx = php.n[1]; nz = php.n[2]
+    nTrc = nx
+    nSamp = nz
+    TRACE = permutedims(php.data, (2,1))
+  elseif dims == 3
+    p.surveyType = h5geo.SurveyType.THREE_D
+    x0 = php.o[1]; y0 = php.o[2]; z0 = -php.o[3]
+    dx = php.d[1]; dy = php.d[2]; dz = php.d[3]
+    nx = php.n[1]; ny = php.n[2]; nz = php.n[3]
+    nTrc = nx*ny
+    nSamp = nz
+    TRACE = reshape(permutedims(php.data, (3,2,1)), (nz, nx*ny))
+  else
+    @error "PhysicalParameter dimensions is neither 2D or 3D"
+    return
+  end
+
+  p.nTrc = nTrc
+  p.nSamp = nSamp
+  
+  if nTrc < 1000
+    p.trcChunk = nTrc
+  else 
+    p.trcChunk = 1000
+  end
+
+  seis = cnt.createSeis(objName, p, objCreationType)
+  if isnothing(seis)
+    @error "Unable to create Seis: $objName"
+    return
+  end
+
+  val = seis.generateSTKGeometry(x0, dx, nx, y0, dy, ny, z0)
+  if isnothing(val)
+    @error "Unable to create generate STK geometry for Seis: $objName"
+    return
+  end
+
+  val = seis.writeTrace(TRACE)
+  if isnothing(val)
+    @error "Unable to write traces: $objName"
+    return
+  end
+
+  seis.getH5File().flush()
 end

@@ -67,9 +67,21 @@ function n_samples(g::H5GeometryOOC, nsrc::Integer)
 end
 
 # Subsample out-of-core geometry structure
-function subsample(geometry::H5GeometryOOC, srcnum)
+function subsample(geometry::H5GeometryOOC, srcnum::Number)
   con = deepcopy(geometry.container)
   con.pkeyvals = [con.pkeyvals[srcnum]]
+  return H5GeometryOOC(h5geo=geometry.h5geo, container=con, key=geometry.key,
+                      xkey=geometry.xkey, ykey=geometry.ykey, zkey=geometry.zkey, 
+                      do_coord_transform=geometry.do_coord_transform,
+                      model_origin_x=geometry.model_origin_x,
+                      model_origin_y=geometry.model_origin_y,
+                      model_orientation=geometry.model_orientation)
+end
+
+# srcnum maybe vector
+function subsample(geometry::H5GeometryOOC, srcnum::AbstractArray)
+  con = deepcopy(geometry.container)
+  con.pkeyvals = con.pkeyvals[srcnum]
   return H5GeometryOOC(h5geo=geometry.h5geo, container=con, key=geometry.key,
                       xkey=geometry.xkey, ykey=geometry.ykey, zkey=geometry.zkey, 
                       do_coord_transform=geometry.do_coord_transform,

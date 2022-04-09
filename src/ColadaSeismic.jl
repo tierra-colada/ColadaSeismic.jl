@@ -4,6 +4,10 @@ using Logging
 using JUDI
 using PyCall
 using LinearAlgebra
+using SlimOptim
+using Random
+using Statistics
+using NLopt
 
 # h5geo includes
 include("h5geo/h5geo.jl")

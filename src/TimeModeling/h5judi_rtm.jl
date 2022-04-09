@@ -4,6 +4,8 @@ function H5RTM(;
   q::JUDI.judiVector, 
   dobs::JUDI.judiVector)
 
+  h5geo = pyimport("h5geopy._h5geo")
+  
   nsrc = length(q.geometry.container)
 
   # Set up info structure for linear operators
@@ -20,4 +22,12 @@ function H5RTM(;
 
   # RTM
   rtm = adjoint(J)*dobs
+
+  H5WritePhysicalParameter(
+    cntName="$(opt.file_path)/rtm.h5",
+    objName="rtm",
+    cntCreationType=h5geo.CreationType.OPEN_OR_CREATE,
+    objCreationType=h5geo.CreationType.CREATE_UNDER_NEW_NAME,
+    php=rtm
+  )
 end
