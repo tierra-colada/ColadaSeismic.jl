@@ -12,13 +12,13 @@ function H5Modeling(;
 
   # geometry
   h5geom=nothing,
-  geom_src_pkey::String,
-  geom_src_xkey::String,
-  geom_src_ykey::String,
-  geom_src_zkey::String,
-  geom_rec_xkey::String,
-  geom_rec_ykey::String,
-  geom_rec_zkey::String,
+  geom_src_pkey::String="SP",
+  geom_src_xkey::String="SRCX",
+  geom_src_ykey::String="SRCY",
+  geom_src_zkey::String="SES",
+  geom_rec_xkey::String="GRPX",
+  geom_rec_ykey::String="GRPY",
+  geom_rec_zkey::String="RGE",
 
   # judi
   opt::JUDI.Options,
