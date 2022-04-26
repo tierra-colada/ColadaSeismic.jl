@@ -27,22 +27,22 @@ function H5GeometryOOC(;
   model_origin_y::Number,
   model_orientation::Number)
   if isnothing(container)
-    @error "H5SeisCon is Nothing"
+    @error "H5SeisCon is Nothing\n"
     return
   end
 
   if isnothing(key)
-    @error "key is Nothing"
+    @error "key is Nothing\n"
     return
   end
 
   if key != "source" && key != "receiver"
-    @error "key must be either 'source' or 'receiver'"
+    @error "key must be either 'source' or 'receiver'\n"
     return
   end
 
   if isnothing(xkey) || isnothing(ykey) || isnothing(zkey)
-    @error "xkey/ykey/zkey is Nothing"
+    @error "xkey/ykey/zkey is Nothing\n"
     return
   end
 
@@ -123,24 +123,24 @@ compareGeometry(geometry_A::Geometry, geometry_B::H5GeometryOOC) = true
 function Geometry(geometry::H5GeometryOOC)
   if isnothing(geometry.container.seis) || isnothing(geometry.container.seis) ||
     (geometry.key != "source" && geometry.key != "receiver")
-    @error "Geometry key is Nothing or it is neither 'source' nor 'receiver'"
+    @error "Geometry key is Nothing or it is neither 'source' nor 'receiver'\n"
     return
   end
 
   if isnothing(geometry.container.seis)
-    @error "Seis is Nothing"
+    @error "Seis is Nothing\n"
     return
   end
 
   if isnothing(geometry.xkey) || 
     isnothing(geometry.ykey) || 
     isnothing(geometry.zkey)
-    @error "xkey/ykey/zkey is Nothing"
+    @error "xkey/ykey/zkey is Nothing\n"
     return
   end
 
   if isnothing(geometry.container.pkeyvals)
-    @error "pkeyvals is Nothing"
+    @error "pkeyvals is Nothing\n"
     return
   end
 
@@ -190,17 +190,17 @@ end
 function Geometry(con::H5SeisCon; xkey::String, ykey::String, zkey::String, do_coord_transform::Bool,
                   model_origin_x::Number, model_origin_y::Number, model_orientation::Number)
   if isnothing(con.seis)
-    @error "Seis is Nothing"
+    @error "Seis is Nothing\n"
     return
   end
 
   if isnothing(con.pkey) || isnothing(xkey) || isnothing(ykey) || isnothing(zkey)
-    @error "pkey/xkey/ykey/zkey is Nothing"
+    @error "pkey/xkey/ykey/zkey is Nothing\n"
     return
   end
 
   if isnothing(con.pkeyvals)
-    @error "pkeyvals is Nothing"
+    @error "pkeyvals is Nothing\n"
     return
   end
 

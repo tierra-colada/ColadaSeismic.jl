@@ -18,18 +18,18 @@ function H5ReadPhysicalParameter2D(
   end
 
   if isempty(php)
-    @error "Unable to read PhysicalParameter. Probably data units incorrect/missing"
+    @error "Unable to read PhysicalParameter. Probably data units incorrect/missing\n"
     return
   end
 
   if ndims(php) != 2
-    @error "PhysicalParameter must be two dimensional array"
+    @error "PhysicalParameter must be two dimensional array\n"
     return
   end
   
   x = h5obj.getTraceHeader(xkey, 0, typemax(Int), h5obj.getLengthUnits(), "m")
   if length(x) < 2
-    @error "$(xkey) can't have less than 2 points"
+    @error "$(xkey) can't have less than 2 points\n"
     return
   end
   
@@ -58,6 +58,7 @@ function H5ReadPhysicalParameter3D(
   minlist = [-Inf, -Inf]
   maxlist = [Inf, Inf]
   if !h5obj.hasPKeySort(keylist[1])
+    h5obj.updateTraceHeaderLimits(Int(1e7))
     h5obj.addPKeySort(keylist[1])
   end
   
@@ -73,14 +74,14 @@ function H5ReadPhysicalParameter3D(
   end
 
   if isempty(php)
-    @error "Unable to read PhysicalParameter. Probably data units incorrect/missing"
+    @error "Unable to read PhysicalParameter. Probably data units incorrect/missing\n"
     return
   end
 
   keylist = [xkey, ykey]
   xy = h5obj.getXYTraceHeaders(keylist, ind, "m", true)
   if isempty(xy)
-    @error "Unable to read $(xkey) and $(ykey) trace headers. Probably length units incorrect/missing"
+    @error "Unable to read $(xkey) and $(ykey) trace headers. Probably length units incorrect/missing\n"
     return
   end
 
@@ -93,7 +94,7 @@ function H5ReadPhysicalParameter3D(
 
   # if the number of XL of each IL is not constant return false
   if !all(uil_from_size[:,2] .== uil_from_size[1,2])
-    @error "Selected traces can't be represented as cube"
+    @error "Selected traces can't be represented as cube\n"
     return
   end
 
@@ -182,7 +183,7 @@ function H5ReadPhysicalParameter(
   elseif h5obj.getSurveyType() == h5geo.SurveyType.THREE_D
     return H5ReadPhysicalParameter3D(h5obj, phptype=phptype, xkey=xkey, ykey=ykey)
   else 
-    @error "H5Object is neither TWO_D nor THREE_D"
+    @error "H5Object is neither TWO_D nor THREE_D\n"
     return
   end
 end
@@ -196,17 +197,17 @@ function H5WritePhysicalParameter(;
   php::JUDI.PhysicalParameter)
 
   if isnothing(cntName) || length(cntName) < 1
-    @error "Container name is empty"
+    @error "Container name is empty\n"
     return
   end
 
   if isnothing(objName) || length(objName) < 1
-    @error "Object name is empty"
+    @error "Object name is empty\n"
     return
   end
 
   if isnothing(php) || length(php.data) < 1
-    @error "PhysicalParameter is empty"
+    @error "PhysicalParameter is empty\n"
     return
   end
 
@@ -215,7 +216,7 @@ function H5WritePhysicalParameter(;
 
   cnt = h5geo.createSeisContainerByName(cntName, cntCreationType)
   if isnothing(cnt)
-    @error "Unable to create SeisContainer: $cntName"
+    @error "Unable to create SeisContainer: $cntName\n"
     return
   end
 
@@ -251,7 +252,7 @@ function H5WritePhysicalParameter(;
     nSamp = nz
     TRACE = reshape(permutedims(php.data, (3,2,1)), (nz, nx*ny))
   else
-    @error "PhysicalParameter dimensions is neither 2D or 3D"
+    @error "PhysicalParameter dimensions is neither 2D or 3D\n"
     return
   end
 
@@ -266,19 +267,19 @@ function H5WritePhysicalParameter(;
 
   seis = cnt.createSeis(objName, p, objCreationType)
   if isnothing(seis)
-    @error "Unable to create Seis: $objName"
+    @error "Unable to create Seis: $objName\n"
     return
   end
 
   val = seis.generateSTKGeometry(x0, dx, nx, y0, dy, ny, z0)
   if isnothing(val)
-    @error "Unable to create generate STK geometry for Seis: $objName"
+    @error "Unable to create generate STK geometry for Seis: $objName\n"
     return
   end
 
   val = seis.writeTrace(TRACE)
   if isnothing(val)
-    @error "Unable to write traces: $objName"
+    @error "Unable to write traces: $objName\n"
     return
   end
 

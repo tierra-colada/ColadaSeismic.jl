@@ -13,15 +13,21 @@ function H5SeisCon(;
   pkey::String="SP",
   pkeyvals=nothing)
   if isnothing(seis)
-    @error "Seis is Nothing"
+    @error "Seis is Nothing\n"
     return
   end
 
   if isnothing(pkey)
-    @error "pkey is Nothing"
+    @error "pkey is Nothing\n"
     return
   end
 
+  if !seis.hasPKeySort(pkey)
+    seis.updateTraceHeaderLimits(Int(1e7))
+    seis.addPKeySort(pkey)
+  end
+
+  # must go after 'addPKeySort'
   if isnothing(pkeyvals)
     pkeyvals = seis.getPKeyValues(pkey)
   end

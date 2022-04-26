@@ -2,17 +2,17 @@ export read_H5SeisCon
 
 function read_H5SeisCon(con::H5SeisCon, blocks::Array{Int,1})
   if isnothing(con.seis)
-    @error "Seis is Nothing"
+    @error "Seis is Nothing\n"
     return
   end
 
   if isnothing(con.pkey)
-    @error "pkey is Nothing"
+    @error "pkey is Nothing\n"
     return
   end
 
   if isnothing(con.pkeyvals)
-    @error "pkeyvals is Nothing"
+    @error "pkeyvals is Nothing\n"
     return
   end
 
@@ -35,17 +35,17 @@ end
 
 # function read_H5SeisCon(con::H5SeisCon, blocks::Array{Int,1})
 #   if isnothing(con.seis)
-#     @error "Seis is Nothing"
+#     @error "Seis is Nothing\n"
 #     return
 #   end
 
 #   if isnothing(con.pkey)
-#     @error "pkey is Nothing"
+#     @error "pkey is Nothing\n"
 #     return
 #   end
 
 #   if isnothing(con.pkeyvals)
-#     @error "pkeyvals is Nothing"
+#     @error "pkeyvals is Nothing\n"
 #     return
 #   end
 

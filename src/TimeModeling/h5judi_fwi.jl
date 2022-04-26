@@ -20,12 +20,12 @@ function H5FWI(;
 
   # Optimization parameters
   if niterations < 1
-    @error "Number of iterations can't be less that 1: $niterations"
+    @error "Number of iterations can't be less that 1: $niterations\n"
     return
   end
 
   if batchsize < 1
-    @error "Batch size can't be less that 1: $batchsize"
+    @error "Batch size can't be less that 1: $batchsize\n"
     return
   end
 
