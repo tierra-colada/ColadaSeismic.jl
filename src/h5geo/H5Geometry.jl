@@ -187,40 +187,48 @@ function Geometry(geometry::H5GeometryOOC)
   return GeometryIC{Float32}(xCell, yCell, zCell, dtCell, ntCell, tCell)
 end
 
-function Geometry(con::H5SeisCon; xkey::String, ykey::String, zkey::String, do_coord_transform::Bool,
-                  model_origin_x::Number, model_origin_y::Number, model_orientation::Number)
-  if isnothing(con.seis)
+function Geometry(;
+  container::H5SeisCon,
+  xkey::String, 
+  ykey::String, 
+  zkey::String, 
+  do_coord_transform::Bool,
+  model_origin_x::Number, 
+  model_origin_y::Number, 
+  model_orientation::Number)
+
+  if isnothing(container.seis)
     @error "Seis is Nothing\n"
     return
   end
 
-  if isnothing(con.pkey) || isnothing(xkey) || isnothing(ykey) || isnothing(zkey)
+  if isnothing(container.pkey) || isnothing(xkey) || isnothing(ykey) || isnothing(zkey)
     @error "pkey/xkey/ykey/zkey is Nothing\n"
     return
   end
 
-  if isnothing(con.pkeyvals)
+  if isnothing(container.pkeyvals)
     @error "pkeyvals is Nothing\n"
     return
   end
 
-  dt = Float32(abs(con.seis.getSampRate("ms")))
-  nt = Integer(con.seis.getNSamp())
+  dt = Float32(abs(container.seis.getSampRate("ms")))
+  nt = Integer(container.seis.getNSamp())
   t = Float32((nt-1)*dt)
 
-  nsrc = length(con.pkeyvals)
+  nsrc = length(container.pkeyvals)
   xCell = Vector{Vector{Float32}}(undef, nsrc)
   yCell = Vector{Vector{Float32}}(undef, nsrc)
   zCell = Vector{Vector{Float32}}(undef, nsrc)
   dtCell = Vector{Float32}(undef, nsrc)
   ntCell = Vector{Integer}(undef, nsrc)
   tCell = Vector{Float32}(undef, nsrc)
-  keylist = [con.pkey]
+  keylist = [container.pkey]
   for block in 1:nsrc
-    minlist = [con.pkeyvals[block]]
-    maxlist = [con.pkeyvals[block]]
-    _, _, ind = con.seis.getSortedData(keylist, minlist, maxlist, 0, 0)
-    xy = Float32.(con.seis.getXYTraceHeaders([xkey, ykey], ind, "m", do_coord_transform))  # MUST BE TRUE
+    minlist = [container.pkeyvals[block]]
+    maxlist = [container.pkeyvals[block]]
+    _, _, ind = container.seis.getSortedData(keylist, minlist, maxlist, 0, 0)
+    xy = Float32.(container.seis.getXYTraceHeaders([xkey, ykey], ind, "m", do_coord_transform))
 
     xy[:,1] = xy[:,1] .- model_origin_x
     xy[:,2] = xy[:,2] .- model_origin_y
@@ -230,7 +238,7 @@ function Geometry(con::H5SeisCon; xkey::String, ykey::String, zkey::String, do_c
 
     xCell[block] = xy[:,1]
     yCell[block] = xy[:,2]
-    zCell[block] = Float32.(con.seis.getTraceHeader([zkey], ind, [con.seis.getLengthUnits()], ["m"])[:])
+    zCell[block] = Float32.(container.seis.getTraceHeader([zkey], ind, [container.seis.getLengthUnits()], ["m"])[:])
     dtCell[block] = dt
     ntCell[block] = nt
     tCell[block] = t

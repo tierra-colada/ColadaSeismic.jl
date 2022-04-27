@@ -58,6 +58,7 @@ function H5ReadPhysicalParameter3D(
   minlist = [-Inf, -Inf]
   maxlist = [Inf, Inf]
   if !h5obj.hasPKeySort(keylist[1])
+    @info "Updating trace header limits and adding pkey sort: $pkey..."
     h5obj.updateTraceHeaderLimits(Int(1e7))
     h5obj.addPKeySort(keylist[1])
   end

@@ -50,13 +50,13 @@ function H5Modeling(;
     return
   end
 
+  # prepare physical parameters
   phpvel, model_orientation = H5ReadPhysicalParameter(
     h5vel, phptype=VELOCITY, xkey=model_xkey, ykey=model_ykey)
   if isnothing(phpvel)
     @error "Unable to read PhysicalParameter: VELOCITY\n"
     return
   end
-  model = JUDI.Model(phpvel.n, phpvel.d, phpvel.o, phpvel.data)
 
   # declare PHP vars to be able use thm as arguments (or unknown var error will appear)
   phpdensity = nothing
@@ -148,26 +148,57 @@ function H5Modeling(;
     xkey=geom_src_xkey, 
     ykey=geom_src_ykey, 
     zkey=geom_src_zkey, 
-    do_coord_transform=false, 
+    do_coord_transform=true, 
     model_origin_x=model_origin_x, 
     model_origin_y=model_origin_y, 
     model_orientation=model_orientation)
+
+  # recGeometry = Geometry(
+  #   container=con, 
+  #   xkey=geom_rec_xkey, 
+  #   ykey=geom_rec_ykey, 
+  #   zkey=geom_rec_zkey, 
+  #   do_coord_transform=true, 
+  #   model_origin_x=model_origin_x, 
+  #   model_origin_y=model_origin_y, 
+  #   model_orientation=model_orientation)
+  # srcGeometry = Geometry(
+  #   container=con, 
+  #   xkey=geom_src_xkey, 
+  #   ykey=geom_src_ykey, 
+  #   zkey=geom_src_zkey, 
+  #   do_coord_transform=true, 
+  #   model_origin_x=model_origin_x, 
+  #   model_origin_y=model_origin_y, 
+  #   model_orientation=model_orientation)
 
   if isnothing(srcGeometry) || isnothing(srcGeometry)
     @error "Unable to prepare Source and Receiver JUDI Geometry objects from H5Seis\n"
     return
   end
 
-  # in case computation type is RTM/FWI dobs is observed data
-  dobs = judiVector(recGeometry, con)
+  # setup wavelet
+  dt = Float32(abs(h5geom.getSampRate("ms")))
+  nt = Integer(h5geom.getNSamp())
+  t = Float32((nt-1)*dt)
+  wavelet = ricker_wavelet(t, dt, src_frq)
+  q = judiVector(srcGeometry, wavelet)
 
-  dt = h5geom.getSampRate("ms")
-  nt = h5geom.getNSamp()
-  t = dt*(nt-1)
+  # Set up info structure for linear operators
+  nsrc = length(con)
+  ntComp = get_computational_nt(srcGeometry, recGeometry, model)
+  info = Info(prod(model.n), nsrc, ntComp)
+
+  # JUDI (Devito) doesn't create a dir to save data
+  if opt.save_data_to_disk
+    mkpath(opt.file_path)
+  end
 
   # print modeling info
   @info "computation_type: $computation_type\n"
+  @info "ntComp: $ntComp\n"
   @info "model settings:\n"
+  @info "model.n: $(model.n)\n"
   @info "model_xkey: $model_xkey\n"
   @info "model_ykey: $model_ykey\n"
   @info "model_origin_x: $model_origin_x\n"
@@ -177,23 +208,23 @@ function H5Modeling(;
   @info "geom_src_xkey: $geom_src_xkey\n"
   @info "geom_src_ykey: $geom_src_ykey\n"
   @info "geom_src_zkey: $geom_src_zkey\n"
-  @info "t0: 0\n"
-  @info "t1: $t\n"
+  @info "geom_rec_xkey: $geom_rec_xkey\n"
+  @info "geom_rec_ykey: $geom_rec_ykey\n"
+  @info "geom_rec_zkey: $geom_rec_zkey\n"
   @info "dt: $dt\n"
+  @info "t: $t\n"
   @info "src_frq (kHz): $src_frq"
-  @info "nsrc: $(length(con))\n"
+  @info "nsrc: $(nsrc)\n"
   @info "pkey: $(con.pkey)\n"
   @info "pkeyvals: $(con.pkeyvals)\n"
 
-  # setup wavelet
-  wavelet = ricker_wavelet(t, dt, src_frq)
-  q = judiVector(srcGeometry, wavelet)
-
   if computation_type == "Forward Modeling"
-    H5ForwardModeling(model=model, opt=opt, q=q, recGeometry=recGeometry)
+    H5ForwardModeling(model=model, opt=opt, q=q, info=info, recGeometry=recGeometry)
   elseif computation_type == "RTM"
-    H5RTM(model=model, opt=opt, q=q, dobs=dobs)
+    dobs = judiVector(recGeometry, con)
+    H5RTM(model=model, opt=opt, q=q, info=info, dobs=dobs)
   elseif computation_type == "FWI"
+    dobs = judiVector(recGeometry, con)
     H5FWI(model=model, opt=opt, q=q, dobs=dobs, 
           niterations=fwi_niter, batchsize=fwi_batchsize, 
           vmin=vmin, vmax=vmax)

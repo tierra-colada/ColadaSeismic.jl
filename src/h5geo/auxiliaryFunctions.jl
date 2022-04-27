@@ -5,13 +5,13 @@ function get_computational_nt(srcGeometry::H5GeometryOOC, recGeometry::H5Geometr
   nsrc = length(srcGeometry.container)
   nt = Array{Integer}(undef, nsrc)
   dtComp = calculate_dt(model; dt=dt)
-  dt_src = srcGeometry.container.seis.getSampRate("ms")
+  dt_src = abs(srcGeometry.container.seis.getSampRate("ms"))
   nt_src = srcGeometry.container.seis.getNSamp()
-  dt_rec = recGeometry.container.seis.getSampRate("ms")
+  dt_rec = abs(recGeometry.container.seis.getSampRate("ms"))
   nt_rec = recGeometry.container.seis.getNSamp()
   for j=1:nsrc
-    ntSrc = Int(dt_src*(nt_src-1) ÷ dtComp) + 1
     ntRec = Int(dt_rec*(nt_rec-1) ÷ dtComp) + 1
+    ntSrc = Int(dt_src*(nt_src-1) ÷ dtComp) + 1
     nt[j] = max(ntRec, ntSrc)
   end
   return nt

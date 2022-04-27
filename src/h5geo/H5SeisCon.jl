@@ -23,6 +23,7 @@ function H5SeisCon(;
   end
 
   if !seis.hasPKeySort(pkey)
+    @info "Updating trace header limits and adding pkey sort: $pkey..."
     seis.updateTraceHeaderLimits(Int(1e7))
     seis.addPKeySort(pkey)
   end
