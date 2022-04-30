@@ -1,16 +1,16 @@
 function H5ForwardModeling(;
   model::JUDI.Model,
-  opt::JUDI.Options,
+  opt::JUDI.JUDIOptions,
   q::JUDI.judiVector,
-  info::JUDI.Info,
   recGeometry)
 
   ###################################################################################################
 
   # Setup operators
-  Pr = judiProjection(info, recGeometry)
-  F = judiModeling(info, model; options=opt)
-  Ps = judiProjection(info, q.geometry)
-  
+  Pr = judiProjection(recGeometry)
+  F = judiModeling(model; options=opt)
+  Ps = judiProjection(q.geometry)
+
   dobs = Pr*F*adjoint(Ps)*q
+  @info "Modeling finished"
 end

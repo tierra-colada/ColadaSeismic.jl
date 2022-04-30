@@ -5,6 +5,8 @@ export H5SeisCon
 mutable struct H5SeisCon
   seis::PyCall.PyObject
   pkey::String
+  # 'pkeyvals' must be Float64 as roundoff may cause problems 
+  # when retrieving data from 'seis' (getPKeyTraceSize for example)
   pkeyvals::Array{Float64,1}
 end
 

@@ -64,14 +64,14 @@ function H5ReadPhysicalParameter3D(
   end
   
   if phptype == VELOCITY 
-    php, il_xl, ind = h5obj.getSortedData(keylist, minlist, maxlist, 0, typemax(Int), true, "km/s")
+    php, il_xl, ind = h5obj.getSortedData(keylist, minlist, maxlist, 0, typemax(Int), "km/s")
     php = (1f0 ./ php).^2
   elseif phptype == DENSITY
-    php, il_xl, ind = h5obj.getSortedData(keylist, minlist, maxlist, 0, typemax(Int), true, "g/cm^3")
+    php, il_xl, ind = h5obj.getSortedData(keylist, minlist, maxlist, 0, typemax(Int), "g/cm^3")
   elseif phptype == THETA || phptype == PHI
-    php, il_xl, ind = h5obj.getSortedData(keylist, minlist, maxlist, 0, typemax(Int), true, "rad")
+    php, il_xl, ind = h5obj.getSortedData(keylist, minlist, maxlist, 0, typemax(Int), "rad")
   else
-    php, il_xl, ind = h5obj.getSortedData(keylist, minlist, maxlist, 0, typemax(Int), true)
+    php, il_xl, ind = h5obj.getSortedData(keylist, minlist, maxlist, 0, typemax(Int))
   end
 
   if isempty(php)

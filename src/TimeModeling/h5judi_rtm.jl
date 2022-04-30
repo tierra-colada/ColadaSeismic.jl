@@ -1,8 +1,7 @@
 function H5RTM(;
   model::JUDI.Model,
-  opt::JUDI.Options,
+  opt::JUDI.JUDIOptions,
   q::JUDI.judiVector, 
-  info::JUDI.Info,
   dobs::JUDI.judiVector)
 
   h5geo = pyimport("h5geopy._h5geo")
@@ -10,9 +9,9 @@ function H5RTM(;
   ###################################################################################################
 
   # Setup operators
-  Pr = judiProjection(info, dobs.geometry)
-  F = judiModeling(info, model; options=opt)
-  Ps = judiProjection(info, q.geometry)
+  Pr = judiProjection(dobs.geometry)
+  F = judiModeling(model; options=opt)
+  Ps = judiProjection(q.geometry)
   J = judiJacobian(Pr*F*adjoint(Ps), q)
 
   # RTM
@@ -25,4 +24,6 @@ function H5RTM(;
     objCreationType=h5geo.CreationType.CREATE_UNDER_NEW_NAME,
     php=rtm
   )
+
+  @info "RTM finished"
 end

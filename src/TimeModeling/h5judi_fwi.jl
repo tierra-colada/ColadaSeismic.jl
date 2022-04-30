@@ -1,7 +1,7 @@
 # vmin/vmax in km/s
 function H5FWI(;
   model::JUDI.Model,
-  opt::JUDI.Options,
+  opt::JUDI.JUDIOptions,
   q::JUDI.judiVector,
   dobs::JUDI.judiVector,
   niterations::Int,
@@ -69,4 +69,6 @@ function H5FWI(;
     objCreationType=h5geo.CreationType.CREATE_UNDER_NEW_NAME,
     php=sqrt.(1f0./model.m)
   )
+
+  @info "FWI finished"
 end

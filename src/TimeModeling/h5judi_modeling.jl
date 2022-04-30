@@ -21,8 +21,7 @@ function H5Modeling(;
   geom_rec_zkey::String="RGE",
 
   # judi
-  opt::JUDI.Options,
-  src_frq::Number,
+  opt::JUDI.JUDIOptions,
 
   # FWI constraints
   vmin::Number,
@@ -47,6 +46,11 @@ function H5Modeling(;
 
   if isnothing(opt)
     @error "No JUDI Options for modeling\n"
+    return
+  end
+
+  if !isnothing(opt.dt_comp) && opt.dt_comp <= 0
+    @error "dt_comp can't be less or equal to zero\n"
     return
   end
 
@@ -181,24 +185,24 @@ function H5Modeling(;
   dt = Float32(abs(h5geom.getSampRate("ms")))
   nt = Integer(h5geom.getNSamp())
   t = Float32((nt-1)*dt)
-  wavelet = ricker_wavelet(t, dt, src_frq)
+  wavelet = ricker_wavelet(t, dt, opt.f0)
   q = judiVector(srcGeometry, wavelet)
-
-  # Set up info structure for linear operators
-  nsrc = length(con)
-  ntComp = get_computational_nt(srcGeometry, recGeometry, model)
-  info = Info(prod(model.n), nsrc, ntComp)
 
   # JUDI (Devito) doesn't create a dir to save data
   if opt.save_data_to_disk
     mkpath(opt.file_path)
   end
 
+  # simply to print the value
+  ntComp = get_computational_nt(srcGeometry, recGeometry, model, dt=opt.dt_comp)
+
   # print modeling info
   @info "computation_type: $computation_type\n"
   @info "ntComp: $ntComp\n"
   @info "model settings:\n"
+  @info "model.o: $(model.o)\n"
   @info "model.n: $(model.n)\n"
+  @info "model.d: $(model.d)\n"
   @info "model_xkey: $model_xkey\n"
   @info "model_ykey: $model_ykey\n"
   @info "model_origin_x: $model_origin_x\n"
@@ -213,16 +217,17 @@ function H5Modeling(;
   @info "geom_rec_zkey: $geom_rec_zkey\n"
   @info "dt: $dt\n"
   @info "t: $t\n"
-  @info "src_frq (kHz): $src_frq"
-  @info "nsrc: $(nsrc)\n"
+  @info "src_frq (kHz): $(opt.f0)"
+  @info "nsrc: $(length(con))\n"
   @info "pkey: $(con.pkey)\n"
   @info "pkeyvals: $(con.pkeyvals)\n"
+  @info "options: $opt"
 
   if computation_type == "Forward Modeling"
-    H5ForwardModeling(model=model, opt=opt, q=q, info=info, recGeometry=recGeometry)
+    H5ForwardModeling(model=model, opt=opt, q=q, recGeometry=recGeometry)
   elseif computation_type == "RTM"
     dobs = judiVector(recGeometry, con)
-    H5RTM(model=model, opt=opt, q=q, info=info, dobs=dobs)
+    H5RTM(model=model, opt=opt, q=q, dobs=dobs)
   elseif computation_type == "FWI"
     dobs = judiVector(recGeometry, con)
     H5FWI(model=model, opt=opt, q=q, dobs=dobs, 

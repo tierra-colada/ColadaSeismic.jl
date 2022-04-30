@@ -2,9 +2,15 @@ import JUDI.Geometry, JUDI.get_nsrc, JUDI.n_samples, JUDI.subsample, JUDI.compar
 
 export H5GeometryOOC
 
-mutable struct H5GeometryOOC <: Geometry{Float32}
+mutable struct H5GeometryOOC{T} <: Geometry{T}
 	h5geo::PyCall.PyObject
 	container::H5SeisCon
+  # JUDI GeometryOOC members start
+  dt::Array{T,1}
+  nt::Array{<:Integer,1}
+  t::Array{T,1}
+  nrec::Array{<:Integer,1}
+  # JUDI GeometryOOC members end
 	key::String
 	xkey::String
 	ykey::String
@@ -14,6 +20,18 @@ mutable struct H5GeometryOOC <: Geometry{Float32}
   model_origin_y::Number
 	model_orientation::Number
 end
+
+# mutable struct MyStruct{T}
+#   a::Array{<:Integer,1}
+#   b::Array{<:Integer,1}
+#   c::Array{T,1}
+# end
+
+# a = ones(Int64, 2)
+# b = ones(Integer, 3)
+# c = ones(Float32, 3)
+
+# MyStruct(a, b, c)
 
 function H5GeometryOOC(;
   h5geo::PyCall.PyObject,
@@ -46,7 +64,22 @@ function H5GeometryOOC(;
     return
   end
 
-  return H5GeometryOOC(h5geo, container, key, xkey, ykey, zkey, do_coord_transform, model_origin_x, model_origin_y, model_orientation)
+  nsrc = length(container)
+  
+  dt = zeros(Float32, nsrc) .+ Float32(abs(container.seis.getSampRate("ms")))
+  nt = zeros(Integer, nsrc) .+ Integer(container.seis.getNSamp())
+  t = zeros(Float32, nsrc) .+ Float32.((nt.-1).*dt)
+
+  nrec = zeros(Integer, nsrc)
+  i = 1
+  for val in container.pkeyvals
+    nrec[i] = Integer(container.seis.getPKeyTraceSize(container.pkey, val, val))
+    i+=1
+  end
+
+  return H5GeometryOOC(h5geo, container, dt, nt, t, nrec,
+                      key, xkey, ykey, zkey, do_coord_transform, 
+                      model_origin_x, model_origin_y, model_orientation)
 end
 
 ######################## shapes easy access ################################
@@ -56,30 +89,34 @@ function n_samples(g::H5GeometryOOC, info::Info)
   return n_samples(g, info.nsrc)
 end
 
-# if work slow then I need to add 'nsamp' as a member var of H5GeometryOOC
-function n_samples(g::H5GeometryOOC, nsrc::Integer)
-  nt = Integer(g.container.seis.getNSamp())
-  nSamp = 0
-  for j=1:nsrc
-    nSamp += g.container.seis.getPKeyTraceSize(g.container.pkey, g.container.pkeyvals[j], g.container.pkeyvals[j])
-  end
-  return nSamp*nt
-end
+n_samples(g::H5GeometryOOC, nsrc::Integer) = sum([g.nrec[j]*g.nt[j] for j=1:nsrc])
 
-# Subsample out-of-core geometry structure
-function subsample(geometry::H5GeometryOOC, srcnum::Number)
-  con = deepcopy(geometry.container)
-  con.pkeyvals = [con.pkeyvals[srcnum]]
-  return H5GeometryOOC(h5geo=geometry.h5geo, container=con, key=geometry.key,
-                      xkey=geometry.xkey, ykey=geometry.ykey, zkey=geometry.zkey, 
-                      do_coord_transform=geometry.do_coord_transform,
-                      model_origin_x=geometry.model_origin_x,
-                      model_origin_y=geometry.model_origin_y,
-                      model_orientation=geometry.model_orientation)
-end
+# # Subsample out-of-core geometry structure
+# function subsample(geometry::H5GeometryOOC, srcnum::Number)
+#   con = deepcopy(geometry.container)
+#   con.pkeyvals = [con.pkeyvals[srcnum]]
+#   return H5GeometryOOC(h5geo=geometry.h5geo, container=con, key=geometry.key,
+#                       xkey=geometry.xkey, ykey=geometry.ykey, zkey=geometry.zkey, 
+#                       do_coord_transform=geometry.do_coord_transform,
+#                       model_origin_x=geometry.model_origin_x,
+#                       model_origin_y=geometry.model_origin_y,
+#                       model_orientation=geometry.model_orientation)
+# end
 
-# srcnum maybe vector
-function subsample(geometry::H5GeometryOOC, srcnum::AbstractArray)
+# # srcnum maybe vector
+# function subsample(geometry::H5GeometryOOC, srcnum::AbstractArray)
+#   con = deepcopy(geometry.container)
+#   con.pkeyvals = con.pkeyvals[srcnum]
+#   return H5GeometryOOC(h5geo=geometry.h5geo, container=con, key=geometry.key,
+#                       xkey=geometry.xkey, ykey=geometry.ykey, zkey=geometry.zkey, 
+#                       do_coord_transform=geometry.do_coord_transform,
+#                       model_origin_x=geometry.model_origin_x,
+#                       model_origin_y=geometry.model_origin_y,
+#                       model_orientation=geometry.model_orientation)
+# end
+
+# getindex out-of-core geometry structure
+function getindex(geometry::H5GeometryOOC{T}, srcnum::JUDI.RangeOrVec) where T
   con = deepcopy(geometry.container)
   con.pkeyvals = con.pkeyvals[srcnum]
   return H5GeometryOOC(h5geo=geometry.h5geo, container=con, key=geometry.key,
@@ -89,6 +126,8 @@ function subsample(geometry::H5GeometryOOC, srcnum::AbstractArray)
                       model_origin_y=geometry.model_origin_y,
                       model_orientation=geometry.model_orientation)
 end
+
+getindex(geometry::H5GeometryOOC{T}, srcnum::Integer) where T = getindex(geometry, srcnum:srcnum)
 
 # Compare geometries
 function compareGeometry(geometry_A::H5GeometryOOC, geometry_B::H5GeometryOOC)
@@ -107,6 +146,22 @@ function compareGeometry(geometry_A::H5GeometryOOC, geometry_B::H5GeometryOOC)
   end
 
   if geometry_A.container.pkey != geometry_B.container.pkey
+    return false
+  end
+
+  if geometry_A.dt != geometry_B.dt
+    return false
+  end
+
+  if geometry_A.nt != geometry_B.nt
+    return false
+  end
+
+  if geometry_A.t != geometry_B.t
+    return false
+  end
+
+  if geometry_A.nrec != geometry_B.nrec
     return false
   end
 
@@ -144,10 +199,6 @@ function Geometry(geometry::H5GeometryOOC)
     return
   end
 
-  dt = Float32(abs(geometry.container.seis.getSampRate("ms")))
-  nt = Integer(geometry.container.seis.getNSamp())
-  t = Float32((nt-1)*dt)
-
   nsrc = length(geometry.container)
   xCell = Vector{Vector{Float32}}(undef, nsrc)
   yCell = Vector{Vector{Float32}}(undef, nsrc)
@@ -179,9 +230,9 @@ function Geometry(geometry::H5GeometryOOC)
     yCell[block] = xy[:,2]
     zCell[block] = Float32.(geometry.container.seis.getTraceHeader(
       [geometry.zkey], ind, [geometry.container.seis.getLengthUnits()], ["m"])[:])
-    dtCell[block] = dt
-    ntCell[block] = nt
-    tCell[block] = t
+    dtCell[block] = geometry.dt[block]
+    ntCell[block] = geometry.nt[block]
+    tCell[block] = geometry.t[block]
   end
 
   return GeometryIC{Float32}(xCell, yCell, zCell, dtCell, ntCell, tCell)
