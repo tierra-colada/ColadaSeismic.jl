@@ -16,7 +16,6 @@ function H5FWI(;
   mmax = vec(ones(Float32, model.n) .* (1f0 / vmin)^2)
 
   ############################### FWI ###########################################
-  F = judiModeling(deepcopy(model), q.geometry, dobs.geometry; options=opt)
 
   # Optimization parameters
   if niterations < 1
@@ -34,32 +33,33 @@ function H5FWI(;
     batchsize = dobs.nsrc
   end
 
+  count = 0
+
   # NLopt objective function
   println("No.  ", "fval         ", "norm(gradient)")
   function f!(x,grad)
 
-      # Update model
-      model.m .= convert(Array{Float32, 2}, reshape(x, model.n))
+    # Update model
+    model.m .= convert(Array{Float32, 2}, reshape(x, model.n))
 
-      # Seclect batch and calculate gradient
-      i = randperm(dobs.nsrc)[1:batchsize]
-      fval, gradient = fwi_objective(model, q[i], dobs[i])
+    # Seclect batch and calculate gradient
+    i = randperm(dobs.nsrc)[1:batchsize]
+    fval, gradient = fwi_objective(model, q[i], dobs[i], options=opt)
 
-      # Reset gradient in water column to zero
-      gradient = reshape(gradient, model.n)
-      gradient[:, 1:21] .= 0f0
-      grad[1:end] = vec(gradient)
+    # Reset gradient in water column to zero
+    gradient = reshape(gradient, model.n)
+    grad[1:end] = vec(gradient)
 
-      global count; count += 1
-      println(count, "    ", fval, "    ", norm(grad))
-      return convert(Float64, fval)
+    count += 1
+    println(count, "    ", fval, "    ", norm(grad))
+    return convert(Float64, fval)
   end
 
   # Optimization parameters
   nlopt = Opt(:LD_LBFGS, prod(model.n))
   lower_bounds!(nlopt, mmin); upper_bounds!(nlopt, mmax)
   min_objective!(nlopt, f!)
-  maxeval!(nlopt, parse(Int, get(ENV, "NITER", "10")))
+  maxeval!(nlopt, niterations)
   (minf, minx, ret) = optimize(nlopt, vec(model.m.data))
 
   H5WritePhysicalParameter(
@@ -70,5 +70,5 @@ function H5FWI(;
     php=sqrt.(1f0./model.m)
   )
 
-  @info "FWI finished"
+  @info "FWI finished\n"
 end

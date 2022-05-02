@@ -3,6 +3,8 @@ function H5Modeling(;
   # models
   h5vel,
   h5density=nothing,
+  h5qualityFactor=nothing,
+  nb::Real=40,  # number of absorbing boundaries points on each side
   h5epsilon=nothing,
   h5delta=nothing,
   h5tetha=nothing,
@@ -23,13 +25,17 @@ function H5Modeling(;
   # judi
   opt::JUDI.JUDIOptions,
 
-  # FWI constraints
-  vmin::Number,
-  vmax::Number,
-
+  # common settings
   computation_type::String,
+  # LSRTM
+  lsrtm_niter::Int=nothing,
+  lsrtm_batchsize::Int=nothing,
+  # FWI
   fwi_niter::Int=nothing,
   fwi_batchsize::Int=nothing,
+  fwi_vmin::Number,
+  fwi_vmax::Number,
+  # TWRI
   twri_opt::TWRIOptions=nothing
   )
 
@@ -64,6 +70,7 @@ function H5Modeling(;
 
   # declare PHP vars to be able use thm as arguments (or unknown var error will appear)
   phpdensity = nothing
+  phpqualityFactor = nothing
   phpepsilon = nothing
   phpdelta = nothing
   phptheta = nothing
@@ -74,6 +81,15 @@ function H5Modeling(;
       h5density, phptype=DENSITY, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpdensity)
       @error "Unable to read PhysicalParameter: DENSITY\n"
+      return
+    end
+  end
+
+  if !isnothing(h5qualityFactor)
+    phpqualityFactor, model_orientation = H5ReadPhysicalParameter(
+      h5qualityFactor, phptype=QUALITYFACTOR, xkey=model_xkey, ykey=model_ykey)
+    if isnothing(phpqualityFactor)
+      @error "Unable to read PhysicalParameter: QUALITYFACTOR\n"
       return
     end
   end
@@ -116,10 +132,12 @@ function H5Modeling(;
 
   model = JUDI.Model(phpvel.n, phpvel.d, phpvel.o, phpvel.data, 
           rho=isnothing(phpdensity) ? nothing : phpdensity.data, 
+          qp=isnothing(phpqualityFactor) ? nothing : phpqualityFactor.data, 
           epsilon=isnothing(phpepsilon) ? nothing : phpepsilon.data, 
           delta=isnothing(phpdelta) ? nothing : phpdelta.data, 
           theta=isnothing(phptheta) ? nothing : phptheta.data, 
-          phi=isnothing(phpphi) ? nothing : phpphi.data)
+          phi=isnothing(phpphi) ? nothing : phpphi.data,
+          nb=nb)
 
   # Geometry
   if isnothing(h5geom)
@@ -195,10 +213,12 @@ function H5Modeling(;
 
   # simply to print the value
   ntComp = get_computational_nt(srcGeometry, recGeometry, model, dt=opt.dt_comp)
+  dtComp = calculate_dt(model)
 
   # print modeling info
   @info "computation_type: $computation_type\n"
   @info "ntComp: $ntComp\n"
+  @info "dtComp: $dtComp\n"
   @info "model settings:\n"
   @info "model.o: $(model.o)\n"
   @info "model.n: $(model.n)\n"
@@ -221,18 +241,22 @@ function H5Modeling(;
   @info "nsrc: $(length(con))\n"
   @info "pkey: $(con.pkey)\n"
   @info "pkeyvals: $(con.pkeyvals)\n"
-  @info "options: $opt"
+  @info "options: $opt\n"
 
   if computation_type == "Forward Modeling"
     H5ForwardModeling(model=model, opt=opt, q=q, recGeometry=recGeometry)
   elseif computation_type == "RTM"
     dobs = judiVector(recGeometry, con)
+    mkpath(opt.file_path)
     H5RTM(model=model, opt=opt, q=q, dobs=dobs)
+  elseif computation_type == "LSRTM"
+    @error "LSRTM not ready yet\n"
   elseif computation_type == "FWI"
     dobs = judiVector(recGeometry, con)
+    mkpath(opt.file_path)
     H5FWI(model=model, opt=opt, q=q, dobs=dobs, 
           niterations=fwi_niter, batchsize=fwi_batchsize, 
-          vmin=vmin, vmax=vmax)
+          vmin=fwi_vmin, vmax=fwi_vmax)
   elseif computation_type == "TWRI"
     @error "TWRI not ready yet\n"
   end

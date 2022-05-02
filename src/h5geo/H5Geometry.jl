@@ -218,7 +218,7 @@ function Geometry(geometry::H5GeometryOOC)
       ind = [ind[1]]
     end
     xy = Float32.(geometry.container.seis.getXYTraceHeaders(
-      [geometry.xkey, geometry.ykey], ind, "m", geometry.do_coord_transform))  # MUST BE TRUE
+      [geometry.xkey, geometry.ykey], ind, "m", geometry.do_coord_transform))
 
     xy[:,1] = xy[:,1] .- geometry.model_origin_x
     xy[:,2] = xy[:,2] .- geometry.model_origin_y

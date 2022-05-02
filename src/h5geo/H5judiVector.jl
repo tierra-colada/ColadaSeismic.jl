@@ -1,18 +1,33 @@
-import JUDI.get_data, JUDI.judiVector, JUDI.convert
+import JUDI.get_data, JUDI.judiVector, JUDI.convert, JUDI.make_input
 import Base.vec
 
 
-function judiVector(con::H5SeisCon; xkey::String, ykey::String, zkey::String)
-  nSamp = con.seis.getNSamp()
+function judiVector(
+  con::H5SeisCon; 
+  xkey::String, 
+  ykey::String, 
+  zkey::String, 
+  do_coord_transform::Bool,
+  model_origin_x::Number, 
+  model_origin_y::Number, 
+  model_orientation::Number)
   nTrc = 0
   for val in con.pkeyvals
     nTrc += con.seis.getPKeyTraceSize(con.pkey, val, val)
   end
-  m = nSamp*nTrc
-  n = 1
+
   nsrc = length(con.pkeyvals)
 
-  geometry = Geometry(con; xkey=xkey, ykey=ykey, zkey=zkey)
+  geometry = Geometry(
+    container=con, 
+    xkey=xkey, 
+    ykey=ykey, 
+    zkey=zkey, 
+    do_coord_transform=do_coord_transform,
+    model_origin_x=model_origin_x,
+    model_origin_y=model_origin_y,
+    model_orientation=model_orientation)
+
   dataCell = Array{H5SeisCon,1}(undef, nsrc)
   for i = 1:nsrc
     pkeyvals = Array{Float64,1}(undef,1)
@@ -21,32 +36,29 @@ function judiVector(con::H5SeisCon; xkey::String, ykey::String, zkey::String)
                             pkey=con.pkey, pkeyvals=pkeyvals)
   end
 
-  return judiVector{Float32, H5SeisCon}("Julia seismic data container",m,n,nsrc,geometry,dataCell)
+  return judiVector{Float32, H5SeisCon}(nsrc,geometry,dataCell)
 end
 
 
 function judiVector(geometry::JUDI.Geometry, con::H5SeisCon)
-  nSamp = con.seis.getNSamp()
   nTrc = 0
   for val in con.pkeyvals
     nTrc += con.seis.getPKeyTraceSize(con.pkey, val, val)
   end
-  m = nSamp*nTrc
-  n = 1
+  
   nsrc = length(con.pkeyvals)
 
   # fill data vector with pointers to data location
   dataCell = Array{H5SeisCon,1}(undef, nsrc)
   for j=1:nsrc
-      dataCell[j] = split(con,j)
+    dataCell[j] = split(con,j)
   end
 
-  return judiVector{Float32, H5SeisCon}("Julia seismic data container",m,n,nsrc,geometry,dataCell)
+  return judiVector{Float32, H5SeisCon}(nsrc,geometry,dataCell)
 end
 
 
 function judiVector(geometry::JUDI.Geometry, conCell::Array{H5SeisCon})
-  nSamp = conCell[1].seis.getNSamp()
   nTrc = 0
   nsrc = 0
   for con in conCell
@@ -55,16 +67,14 @@ function judiVector(geometry::JUDI.Geometry, conCell::Array{H5SeisCon})
       nTrc += con.seis.getPKeyTraceSize(con.pkey, val, val)
     end
   end
-  m = nSamp*nTrc
-  n = 1
 
   # fill data vector with pointers to data location
   dataCell = Array{H5SeisCon,1}(undef, nsrc)
   for j=1:nsrc
-      dataCell[j] = conCell[j]
+    dataCell[j] = conCell[j]
   end
 
-  return judiVector{Float32, H5SeisCon}("Julia seismic data container",m,n,nsrc,geometry,dataCell)
+  return judiVector{Float32, H5SeisCon}(nsrc,geometry,dataCell)
 end
 
 ##########################################################
@@ -72,6 +82,8 @@ end
 vec(x::H5SeisCon) = vec(x[1].data)
 
 ##########################################################
+
+make_input(jv::judiVector{T, H5SeisCon}) where T = convert(Matrix{T}, jv.data[1][1].data)
 
 for opo=[:+, :-, :*, :/]
   @eval begin

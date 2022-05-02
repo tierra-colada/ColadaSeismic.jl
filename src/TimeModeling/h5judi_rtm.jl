@@ -25,5 +25,5 @@ function H5RTM(;
     php=rtm
   )
 
-  @info "RTM finished"
+  @info "RTM finished\n"
 end

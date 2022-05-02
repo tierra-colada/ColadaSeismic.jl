@@ -12,5 +12,5 @@ function H5ForwardModeling(;
   Ps = judiProjection(q.geometry)
 
   dobs = Pr*F*adjoint(Ps)*q
-  @info "Modeling finished"
+  @info "Modeling finished\n"
 end
