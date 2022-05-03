@@ -5,6 +5,8 @@ function H5ReadPhysicalParameter2D(
 
   h5geo = pyimport("h5geopy._h5geo")
 
+  nullValue = h5obj.getNullValue()
+
   if phptype == VELOCITY 
     php = transpose(h5obj.getTrace(0, typemax(Int), 0, typemax(Int), "km/s"))
     # Slowness squared [s^2/km^2]
@@ -26,6 +28,10 @@ function H5ReadPhysicalParameter2D(
     @error "PhysicalParameter must be two dimensional array\n"
     return
   end
+
+  # JUDI falls down if NaN are passed
+  meanValue = mean(filter(!isnan, php))
+  php[isnan.(php)] .= meanValue
   
   x = h5obj.getTraceHeader(xkey, 0, typemax(Int), h5obj.getLengthUnits(), "m")
   if length(x) < 2
@@ -39,10 +45,10 @@ function H5ReadPhysicalParameter2D(
   
   # Set up PhysicalParameter structure
   n = size(php)   # (x,y,z) or (x,z)
-  d = (abs(h5obj.getSampRate("m")), x[2]-x[1])
+  d = (x[2]-x[1], abs(h5obj.getSampRate("m")))
   o = (x[1], h5obj.getSRD("m") * (-1))
-  
-  return JUDI.PhysicalParameter(php, n, d, o;), 0   # the second parameter is the orientation
+
+  return JUDI.PhysicalParameter(php, n, d, o), 0   # the second parameter is the orientation
 end
 
 
@@ -78,6 +84,10 @@ function H5ReadPhysicalParameter3D(
     @error "Unable to read PhysicalParameter. Probably data units incorrect/missing\n"
     return
   end
+
+  # JUDI falls down if NaN are passed
+  meanValue = mean(filter(!isnan, php))
+  php[isnan.(php)] .= meanValue
 
   keylist = [xkey, ykey]
   xy = h5obj.getXYTraceHeaders(keylist, ind, "m", true)

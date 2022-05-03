@@ -59,7 +59,7 @@ function time_modeling(model_full::Model, srcGeometry::H5GeometryOOC, srcData::J
     nSamp = size(argout.data[1])[1]
     nTrc = size(argout.data[1])[2]
 
-    (length(srcGeometry.container[1].ind) != nTrc) && (@error "Number of indexes doesn't match the number of traces")
+    (length(srcGeometry.container[1].ind) != nTrc) && (@error "Number of indexes doesn't match the number of traces\n")
     if @time !srcGeometry.container.seis.writeTrace(argout.data[1],srcGeometry.container[1].ind,0)
       @warn "Unable to write traces for pkey: $(srcGeometry.container[1].pkey)\n
             pkeyval: $(srcGeometry.container[1].pkeyvals[1])\n"
