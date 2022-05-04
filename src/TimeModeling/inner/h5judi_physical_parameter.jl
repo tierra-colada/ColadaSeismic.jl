@@ -282,6 +282,9 @@ function H5WritePhysicalParameter(;
     return
   end
 
+  # don't forget to set samp rate
+  seis.setSampRate(length(php.d) == 2 ? -php.d[2] : -php.d[3], "m")
+
   val = seis.generateSTKGeometry(x0, dx, nx, y0, dy, ny, z0)
   if isnothing(val)
     @error "Unable to create generate STK geometry for Seis: $objName\n"
