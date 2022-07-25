@@ -8,7 +8,7 @@
 # Thus I distribute previously modeled SEGY files with 'master' branch
 
 
-using ColadaSeismic, JUDI, SegyIO, LinearAlgebra, PyCall, PyPlot
+using JUDI, SegyIO, LinearAlgebra, PyCall, PyPlot
 
 # 'h5map_segy' maps SEGY to HDF5 h5geo::H5Seis object so that the same API is provided
 # but no any data is read from SEGY

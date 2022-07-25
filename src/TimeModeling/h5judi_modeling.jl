@@ -2,10 +2,10 @@
 function H5Modeling(;
   # models
   h5vel,
-  h5density=nothing,
-  h5qualityFactor=nothing,
-  nb::Real=40,  # number of absorbing boundaries points on each side
-  h5epsilon=nothing,
+  h5den=nothing,
+  h5qf=nothing,
+  model_nb::Real=40,  # number of absorbing boundaries points on each side
+  h5eps=nothing,
   h5delta=nothing,
   h5tetha=nothing,
   h5phi=nothing,
@@ -76,27 +76,27 @@ function H5Modeling(;
   phptheta = nothing
   phpphi = nothing
 
-  if !isnothing(h5density)
+  if !isnothing(h5den)
     phpdensity, model_orientation = H5ReadPhysicalParameter(
-      h5density, phptype=DENSITY, xkey=model_xkey, ykey=model_ykey)
+      h5den, phptype=DENSITY, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpdensity)
       @error "Unable to read PhysicalParameter: DENSITY\n"
       return
     end
   end
 
-  if !isnothing(h5qualityFactor)
+  if !isnothing(h5qf)
     phpqualityFactor, model_orientation = H5ReadPhysicalParameter(
-      h5qualityFactor, phptype=QUALITYFACTOR, xkey=model_xkey, ykey=model_ykey)
+      h5qf, phptype=QUALITYFACTOR, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpqualityFactor)
       @error "Unable to read PhysicalParameter: QUALITYFACTOR\n"
       return
     end
   end
 
-  if !isnothing(h5epsilon)
+  if !isnothing(h5eps)
     phpepsilon, model_orientation = H5ReadPhysicalParameter(
-      h5epsilon, phptype=EPSILON, xkey=model_xkey, ykey=model_ykey)
+      h5eps, phptype=EPSILON, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpepsilon)
       @error "Unable to read PhysicalParameter: EPSILON\n"
       return
@@ -137,7 +137,7 @@ function H5Modeling(;
           delta=isnothing(phpdelta) ? nothing : phpdelta.data, 
           theta=isnothing(phptheta) ? nothing : phptheta.data, 
           phi=isnothing(phpphi) ? nothing : phpphi.data,
-          nb=nb)
+          nb=model_nb)
 
   # Geometry
   if isnothing(h5geom)
