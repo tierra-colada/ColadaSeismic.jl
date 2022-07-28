@@ -14,8 +14,8 @@ using NLopt
 include("h5geo/h5geo.jl")
 
 # Colada includes
-include("TimeModeling/inner/util.jl")
-include("TimeModeling/inner/h5judi_physical_parameter.jl")
+include("TimeModeling/util.jl")
+include("TimeModeling/h5judi_physical_parameter.jl")
 include("TimeModeling/h5judi_forward_modeling.jl")
 include("TimeModeling/h5judi_rtm.jl")
 include("TimeModeling/h5judi_fwi.jl")

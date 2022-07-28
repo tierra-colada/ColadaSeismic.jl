@@ -43,7 +43,6 @@ function H5Modeling(;
   )
 
   # pylogging = pyimport("logging")
-  h5gt = pyimport("h5gtpy._h5gt")
   global h5geo = pyimport("h5geopy._h5geo")
   h5geo.sr.setSpatialReferenceFromUserInput(spatial_reference)
   h5geo.sr.setLengthUnits("m")
