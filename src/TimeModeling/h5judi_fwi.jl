@@ -8,8 +8,6 @@ function H5FWI(;
   batchsize::Int,
   vmin::Number,
   vmax::Number)
-
-  h5geo = pyimport("h5geopy._h5geo")
   
   # Bound constraints: Slowness squared [s^2/km^2]
   mmin = vec(ones(Float32, model.n) .* (1f0 / vmax)^2)

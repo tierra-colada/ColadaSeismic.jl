@@ -36,12 +36,21 @@ function H5Modeling(;
   fwi_vmin::Number,
   fwi_vmax::Number,
   # TWRI
-  twri_opt::TWRIOptions=nothing
+  twri_opt::TWRIOptions=nothing,
+
+  save_as::SaveAs,
+  spatial_reference::String
   )
 
   # pylogging = pyimport("logging")
   h5gt = pyimport("h5gtpy._h5gt")
-  h5geo = pyimport("h5geopy._h5geo")
+  global h5geo = pyimport("h5geopy._h5geo")
+  h5geo.sr.setSpatialReferenceFromUserInput(spatial_reference)
+  h5geo.sr.setLengthUnits("m")
+  h5geo.sr.setTemporalUnits("ms")
+
+  global spatial_reference = spatial_reference
+  global save_as = save_as
 
   @info "H5Modeling started\n"
 
@@ -61,12 +70,16 @@ function H5Modeling(;
   end
 
   # prepare physical parameters
-  phpvel, model_orientation = H5ReadPhysicalParameter(
+  phpvel, global model_orientation = H5ReadPhysicalParameter(
     h5vel, phptype=VELOCITY, xkey=model_xkey, ykey=model_ykey)
   if isnothing(phpvel)
     @error "Unable to read PhysicalParameter: VELOCITY\n"
     return
   end
+
+  global survey_type = length(phpvel.n) == 2 ? h5geo.SurveyType.TWO_D : h5geo.SurveyType.THREE_D
+  global model_origin_x = phpvel.o[1]
+  global model_origin_y = length(phpvel.o == 2) ? 0.0 : phpvel.o[2]
 
   # declare PHP vars to be able use thm as arguments (or unknown var error will appear)
   phpdensity = nothing
@@ -77,7 +90,7 @@ function H5Modeling(;
   phpphi = nothing
 
   if !isnothing(h5den)
-    phpdensity, model_orientation = H5ReadPhysicalParameter(
+    phpdensity, _ = H5ReadPhysicalParameter(
       h5den, phptype=DENSITY, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpdensity)
       @error "Unable to read PhysicalParameter: DENSITY\n"
@@ -86,7 +99,7 @@ function H5Modeling(;
   end
 
   if !isnothing(h5qf)
-    phpqualityFactor, model_orientation = H5ReadPhysicalParameter(
+    phpqualityFactor, _ = H5ReadPhysicalParameter(
       h5qf, phptype=QUALITYFACTOR, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpqualityFactor)
       @error "Unable to read PhysicalParameter: QUALITYFACTOR\n"
@@ -95,7 +108,7 @@ function H5Modeling(;
   end
 
   if !isnothing(h5eps)
-    phpepsilon, model_orientation = H5ReadPhysicalParameter(
+    phpepsilon, _ = H5ReadPhysicalParameter(
       h5eps, phptype=EPSILON, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpepsilon)
       @error "Unable to read PhysicalParameter: EPSILON\n"
@@ -104,7 +117,7 @@ function H5Modeling(;
   end
 
   if !isnothing(h5delta)
-    phpdelta, model_orientation = H5ReadPhysicalParameter(
+    phpdelta, _ = H5ReadPhysicalParameter(
       h5delta, phptype=DELTA, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpdelta)
       @error "Unable to read PhysicalParameter: DELTA\n"
@@ -113,7 +126,7 @@ function H5Modeling(;
   end
 
   if !isnothing(h5tetha)
-    phptheta, model_orientation = H5ReadPhysicalParameter(
+    phptheta, _ = H5ReadPhysicalParameter(
       h5tetha, phptype=THETA, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phptheta)
       @error "Unable to read PhysicalParameter: THETA\n"
@@ -122,7 +135,7 @@ function H5Modeling(;
   end
 
   if !isnothing(h5phi)
-    phpphi, model_orientation = H5ReadPhysicalParameter(
+    phpphi, _ = H5ReadPhysicalParameter(
       h5phi, phptype=PHI, xkey=model_xkey, ykey=model_ykey)
     if isnothing(phpphi)
       @error "Unable to read PhysicalParameter: PHI\n"
@@ -153,46 +166,44 @@ function H5Modeling(;
 
   con = H5SeisCon(seis=h5geom, pkey=geom_src_pkey)
   recGeometry = H5GeometryOOC(
-    h5geo=h5geo, 
     container=con, 
     key="receiver", 
     xkey=geom_rec_xkey, 
     ykey=geom_rec_ykey, 
     zkey=geom_rec_zkey, 
-    do_coord_transform=true, 
-    model_origin_x=model_origin_x, 
-    model_origin_y=model_origin_y, 
-    model_orientation=model_orientation)
+    do_coord_transform=true)
   srcGeometry = H5GeometryOOC(
-    h5geo=h5geo, 
     container=con, 
     key="source", 
     xkey=geom_src_xkey, 
     ykey=geom_src_ykey, 
     zkey=geom_src_zkey, 
-    do_coord_transform=true, 
-    model_origin_x=model_origin_x, 
-    model_origin_y=model_origin_y, 
-    model_orientation=model_orientation)
+    do_coord_transform=true,)
 
   # recGeometry = Geometry(
   #   container=con, 
   #   xkey=geom_rec_xkey, 
   #   ykey=geom_rec_ykey, 
   #   zkey=geom_rec_zkey, 
-  #   do_coord_transform=true, 
-  #   model_origin_x=model_origin_x, 
-  #   model_origin_y=model_origin_y, 
-  #   model_orientation=model_orientation)
+  #   do_coord_transform=true)
   # srcGeometry = Geometry(
   #   container=con, 
   #   xkey=geom_src_xkey, 
   #   ykey=geom_src_ykey, 
   #   zkey=geom_src_zkey, 
-  #   do_coord_transform=true, 
-  #   model_origin_x=model_origin_x, 
-  #   model_origin_y=model_origin_y, 
-  #   model_orientation=model_orientation)
+  #   do_coord_transform=true)
+
+  # create seis_out
+  if save_as == SaveAs::H5SEIS
+    global seis_out_cnt = h5geo.createSeisContainerByName(
+      joinpath(opt.file_path, opt.file_name), 
+      h5geo.CreationType.OPEN_OR_CREATE)
+    if isnothing(seis_out_cnt)
+      @error "Unable to open or create seis container for storing output data\n"
+      return
+    end
+  end
+
 
   if isnothing(srcGeometry) || isnothing(srcGeometry)
     @error "Unable to prepare Source and Receiver JUDI Geometry objects from H5Seis\n"

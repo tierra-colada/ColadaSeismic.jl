@@ -4,8 +4,6 @@ function H5RTM(;
   q::JUDI.judiVector, 
   dobs::JUDI.judiVector)
 
-  h5geo = pyimport("h5geopy._h5geo")
-
   ###################################################################################################
 
   # Setup operators

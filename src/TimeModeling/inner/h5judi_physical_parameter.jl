@@ -3,8 +3,6 @@ function H5ReadPhysicalParameter2D(
   phptype::H5PhPType,
   xkey::String)
 
-  h5geo = pyimport("h5geopy._h5geo")
-
   nullValue = h5obj.getNullValue()
 
   if phptype == VELOCITY 
@@ -48,7 +46,7 @@ function H5ReadPhysicalParameter2D(
   d = (x[2]-x[1], abs(h5obj.getSampRate("m")))
   o = (x[1], h5obj.getSRD("m") * (-1))
 
-  return JUDI.PhysicalParameter(php, n, d, o), 0   # the second parameter is the orientation
+  return JUDI.PhysicalParameter(php, n, d, o), orientation
 end
 
 
@@ -57,8 +55,6 @@ function H5ReadPhysicalParameter3D(
   phptype::H5PhPType,
   xkey::String,
   ykey::String)
-
-  h5geo = pyimport("h5geopy._h5geo")
 
   keylist = ["INLINE", "XLINE"]
   minlist = [-Inf, -Inf]
@@ -176,7 +172,7 @@ function H5ReadPhysicalParameter3D(
   n = size(php)   # (x,y,z)
   d = (dx, dy, abs(h5obj.getSampRate("m")))
   o = (origin[1], origin[2], h5obj.getSRD("m") * (-1))
-  
+
   return JUDI.PhysicalParameter(php, n, d, o), orientation
 end
 
@@ -186,8 +182,6 @@ function H5ReadPhysicalParameter(
   phptype::H5PhPType,
   xkey::String,
   ykey::String)
-
-  h5geo = pyimport("h5geopy._h5geo")
 
   if h5obj.getSurveyType() == h5geo.SurveyType.TWO_D
     return H5ReadPhysicalParameter2D(h5obj, phptype=phptype, xkey=xkey)
@@ -222,9 +216,6 @@ function H5WritePhysicalParameter(;
     return
   end
 
-  colada = pyimport("colada")
-  h5geo = pyimport("h5geopy._h5geo")
-
   cnt = h5geo.createSeisContainerByName(cntName, cntCreationType)
   if isnothing(cnt)
     @error "Unable to create SeisContainer: $cntName\n"
@@ -235,9 +226,9 @@ function H5WritePhysicalParameter(;
   authCode = string(colada.Util().CRSCode())
 
   p = h5geo.SeisParam()
-  p.spatialReference = "$authName:$authCode"
-  p.lengthUnits = colada.Util().lengthUnits()
-  p.temporalUnits = colada.Util().timeUnits()
+  p.spatialReference = spatial_reference
+  p.lengthUnits = "m"
+  p.temporalUnits = "ms"
   p.domain = h5geo.Domain.TVD
   p.dataType = h5geo.SeisDataType.STACK
 

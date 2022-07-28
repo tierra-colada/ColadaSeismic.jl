@@ -7,10 +7,7 @@ function judiVector(
   xkey::String, 
   ykey::String, 
   zkey::String, 
-  do_coord_transform::Bool,
-  model_origin_x::Number, 
-  model_origin_y::Number, 
-  model_orientation::Number)
+  do_coord_transform::Bool)
   nTrc = 0
   for val in con.pkeyvals
     nTrc += con.seis.getPKeyTraceSize(con.pkey, val, val)
@@ -23,10 +20,7 @@ function judiVector(
     xkey=xkey, 
     ykey=ykey, 
     zkey=zkey, 
-    do_coord_transform=do_coord_transform,
-    model_origin_x=model_origin_x,
-    model_origin_y=model_origin_y,
-    model_orientation=model_orientation)
+    do_coord_transform=do_coord_transform)
 
   dataCell = Array{H5SeisCon,1}(undef, nsrc)
   for i = 1:nsrc

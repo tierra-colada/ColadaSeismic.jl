@@ -8,12 +8,23 @@
   PHI = 7
 end
 
-function rotate_Nx2_array(arr, ϕ)
-  return arr * [cos(ϕ) -sin(ϕ); sin(ϕ) cos(ϕ)]
+@enum SaveAs begin
+  SEGY = 1
+  H5SEIS = 2
 end
 
-function rotate_2xN_array(arr, ϕ)
-  return [cos(ϕ) -sin(ϕ); sin(ϕ) cos(ϕ)] * arr
+function rotate_Nx2_array(xy, ϕ)
+  return xy * [cos(ϕ) -sin(ϕ); sin(ϕ) cos(ϕ)]
+end
+
+function rotate_2xN_array(xy, ϕ)
+  return [cos(ϕ) -sin(ϕ); sin(ϕ) cos(ϕ)] * xy
+end
+
+function rotate_arrays(x, y, ϕ)
+  x_calc = x*cos(ϕ)+y*sin(ϕ)
+  y_calc = -x*sin(ϕ)+y*cos(ϕ)
+  return x_calc, y_calc
 end
 
 function h5geo2judiTraceHeaderName(h5geoHdrName::String)

@@ -3,7 +3,6 @@ import JUDI.Geometry, JUDI.get_nsrc, JUDI.n_samples, JUDI.subsample, JUDI.compar
 export H5GeometryOOC
 
 mutable struct H5GeometryOOC{T} <: Geometry{T}
-	h5geo::PyCall.PyObject
 	container::H5SeisCon
   # JUDI GeometryOOC members start
   dt::Array{T,1}
@@ -16,9 +15,6 @@ mutable struct H5GeometryOOC{T} <: Geometry{T}
 	ykey::String
 	zkey::String
   do_coord_transform::Bool
-  model_origin_x::Number
-  model_origin_y::Number
-	model_orientation::Number
 end
 
 # mutable struct MyStruct{T}
@@ -34,16 +30,12 @@ end
 # MyStruct(a, b, c)
 
 function H5GeometryOOC(;
-  h5geo::PyCall.PyObject,
   container::H5SeisCon,
   key::String,
   xkey::String,
   ykey::String,
   zkey::String,
-  do_coord_transform::Bool,
-  model_origin_x::Number,
-  model_origin_y::Number,
-  model_orientation::Number)
+  do_coord_transform::Bool)
   if isnothing(container)
     @error "H5SeisCon is Nothing\n"
     return
@@ -77,9 +69,8 @@ function H5GeometryOOC(;
     i+=1
   end
 
-  return H5GeometryOOC(h5geo, container, dt, nt, t, nrec,
-                      key, xkey, ykey, zkey, do_coord_transform, 
-                      model_origin_x, model_origin_y, model_orientation)
+  return H5GeometryOOC(container, dt, nt, t, nrec,
+                      key, xkey, ykey, zkey, do_coord_transform)
 end
 
 ######################## shapes easy access ################################
@@ -95,36 +86,27 @@ n_samples(g::H5GeometryOOC, nsrc::Integer) = sum([g.nrec[j]*g.nt[j] for j=1:nsrc
 # function subsample(geometry::H5GeometryOOC, srcnum::Number)
 #   con = deepcopy(geometry.container)
 #   con.pkeyvals = [con.pkeyvals[srcnum]]
-#   return H5GeometryOOC(h5geo=geometry.h5geo, container=con, key=geometry.key,
+#   return H5GeometryOOC(container=con, key=geometry.key,
 #                       xkey=geometry.xkey, ykey=geometry.ykey, zkey=geometry.zkey, 
-#                       do_coord_transform=geometry.do_coord_transform,
-#                       model_origin_x=geometry.model_origin_x,
-#                       model_origin_y=geometry.model_origin_y,
-#                       model_orientation=geometry.model_orientation)
+#                       do_coord_transform=geometry.do_coord_transform)
 # end
 
 # # srcnum maybe vector
 # function subsample(geometry::H5GeometryOOC, srcnum::AbstractArray)
 #   con = deepcopy(geometry.container)
 #   con.pkeyvals = con.pkeyvals[srcnum]
-#   return H5GeometryOOC(h5geo=geometry.h5geo, container=con, key=geometry.key,
+#   return H5GeometryOOC(container=con, key=geometry.key,
 #                       xkey=geometry.xkey, ykey=geometry.ykey, zkey=geometry.zkey, 
-#                       do_coord_transform=geometry.do_coord_transform,
-#                       model_origin_x=geometry.model_origin_x,
-#                       model_origin_y=geometry.model_origin_y,
-#                       model_orientation=geometry.model_orientation)
+#                       do_coord_transform=geometry.do_coord_transform)
 # end
 
 # getindex out-of-core geometry structure
 function getindex(geometry::H5GeometryOOC{T}, srcnum::JUDI.RangeOrVec) where T
   con = deepcopy(geometry.container)
   con.pkeyvals = con.pkeyvals[srcnum]
-  return H5GeometryOOC(h5geo=geometry.h5geo, container=con, key=geometry.key,
+  return H5GeometryOOC(container=con, key=geometry.key,
                       xkey=geometry.xkey, ykey=geometry.ykey, zkey=geometry.zkey, 
-                      do_coord_transform=geometry.do_coord_transform,
-                      model_origin_x=geometry.model_origin_x,
-                      model_origin_y=geometry.model_origin_y,
-                      model_orientation=geometry.model_orientation)
+                      do_coord_transform=geometry.do_coord_transform)
 end
 
 getindex(geometry::H5GeometryOOC{T}, srcnum::Integer) where T = getindex(geometry, srcnum:srcnum)
@@ -168,8 +150,27 @@ function compareGeometry(geometry_A::H5GeometryOOC, geometry_B::H5GeometryOOC)
   return geometry_A.container.pkeyvals == geometry_B.container.pkeyvals
 end
 
-isequal(geometry_A::H5GeometryOOC, geometry_B::H5GeometryOOC) = compareGeometry(geometry_A, geometry_B)
+function compareGeometry(geometry_A::H5GeometryOOC, geometry_B::GeometryOOC)
+  if geometry_A.key != geometry_B.key
+    return false
+  end
 
+  if geometry_A.dt != geometry_B.dt
+    return false
+  end
+
+  if geometry_A.nt != geometry_B.nt
+    return false
+  end
+
+  if geometry_A.t != geometry_B.t
+    return false
+  end
+
+  return geometry_A.nrec == geometry_B.nrec
+end
+
+compareGeometry(geometry_A::GeometryOOC, geometry_B::H5GeometryOOC) = compareGeometry(geometry_B, geometry_A)
 compareGeometry(geometry_A::H5GeometryOOC, geometry_B::Geometry) = true
 compareGeometry(geometry_A::Geometry, geometry_B::H5GeometryOOC) = true
 
@@ -220,11 +221,11 @@ function Geometry(geometry::H5GeometryOOC)
     xy = Float32.(geometry.container.seis.getXYTraceHeaders(
       [geometry.xkey, geometry.ykey], ind, "m", geometry.do_coord_transform))
 
-    xy[:,1] = xy[:,1] .- geometry.model_origin_x
-    xy[:,2] = xy[:,2] .- geometry.model_origin_y
-    xy = rotate_Nx2_array(xy, -geometry.model_orientation)
-    xy[:,1] = xy[:,1] .+ geometry.model_origin_x
-    xy[:,2] = xy[:,2] .+ geometry.model_origin_y
+    xy[:,1] = xy[:,1] .- model_origin_x
+    xy[:,2] = xy[:,2] .- model_origin_y
+    xy = rotate_Nx2_array(xy, -model_orientation)
+    xy[:,1] = xy[:,1] .+ model_origin_x
+    xy[:,2] = xy[:,2] .+ model_origin_y
 
     xCell[block] = xy[:,1]
     yCell[block] = xy[:,2]
@@ -243,10 +244,7 @@ function Geometry(;
   xkey::String, 
   ykey::String, 
   zkey::String, 
-  do_coord_transform::Bool,
-  model_origin_x::Number, 
-  model_origin_y::Number, 
-  model_orientation::Number)
+  do_coord_transform::Bool)
 
   if isnothing(container.seis)
     @error "Seis is Nothing\n"

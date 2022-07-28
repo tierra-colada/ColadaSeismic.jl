@@ -110,8 +110,24 @@ function h5read_segy(segy_files::Array{String})
   seis.readSEGYTraces(segy_files)
   seis.setLengthUnits("mm")
   seis.setTemporalUnits("microsecond")
-  return seis
+  return container, seis
 end
+
+h5geo = pyimport("h5geopy._h5geo")
+if isnothing(h5geo)
+  @error "Unable to import h5geo"
+  return
+end
+
+# set global variables to ColadaSeismic
+setGlobals(
+  model_origin_x=0.0, 
+  model_origin_y=0.0, 
+  model_orientation=0.0,
+  save_as=ColadaSeismic.H5SEIS,
+  h5geo=h5geo,
+  survey_type=h5geo.SurveyType.TWO_D
+  )
 
 # Set up model structure
 n = (120, 100)   # (x,y,z) or (x,z)
@@ -141,32 +157,31 @@ yrec = 0f0
 zrec = range(50f0, stop=50f0, length=nxrec)
 
 # receiver sampling and recording time
-timeR = 1000f0   # receiver recording time [ms]
-dtR = 2f0    # receiver sampling interval [ms]
+timeD = 1000f0   # receiver recording time [ms]
+dtD = 2f0    # receiver sampling interval [ms]
 
 # Set up receiver structure
-recGeometry = Geometry(xrec, yrec, zrec; dt=dtR, t=timeR, nsrc=nsrc)
+recGeometry = Geometry(xrec, yrec, zrec; dt=dtD, t=timeD, nsrc=nsrc)
 
 # Set up source geometry (cell array with source locations for each shot)
 xsrc = convertToCell(range(400f0, stop=800f0, length=nsrc))
 ysrc = convertToCell(range(0f0, stop=0f0, length=nsrc))
 zsrc = convertToCell(range(200f0, stop=200f0, length=nsrc))
 
-# source sampling and number of time steps
-timeS = 1000f0  # ms
-dtS = 2f0   # ms
-
 # Set up source structure
-srcGeometry = Geometry(xsrc, ysrc, zsrc; dt=dtS, t=timeS)
+srcGeometry = Geometry(xsrc, ysrc, zsrc; dt=dtD, t=timeD)
+
+# setup wavelet
+#' # Source judiVector
+#' Finally, with the geometry defined, we can create a source wavelet (a simple Ricker wavelet here) a our first `judiVector`
+#' In JUDI, a `judiVector` is the core structure that represent a acquisition-geometry based dataset. This structure encapsulate
+#' the physical locations (trace coordinates) and corrsponding data trace in a source-based structure. for a given `judiVector` `d` then
+#' `d[1]` will be the shot record for the first source, or in the case of the source term, the first source wavelet and its positon.
 
 # setup wavelet
 f0 = 0.01f0     # kHz
-wavelet = ricker_wavelet(timeS, dtS, f0)
+wavelet = ricker_wavelet(timeD, dtD, f0)
 q = judiVector(srcGeometry, wavelet)
-
-# Set up info structure for linear operators
-ntComp = get_computational_nt(srcGeometry, recGeometry, model)
-info = Info(prod(n), nsrc, ntComp)
 
 ###################################################################################################
 
@@ -174,19 +189,19 @@ segy_path = @__DIR__
 segy_path *= "/tmp/"
 segy_name = "shot"
 
-# rm(segy_path, force=true, recursive=true)
-# mkpath(segy_path)
+rm(segy_path, force=true, recursive=true)
+mkpath(segy_path)
 
 # Write shots as segy files to disk (gives error in 'time-tests' branch)
-# opt = Options(optimal_checkpointing=false, isic=false, subsampling_factor=2, dt_comp=1.0,
-#               save_data_to_disk=true, file_path=segy_path, file_name=segy_name)
-opt = Options(optimal_checkpointing=false, isic=false, subsampling_factor=2, dt_comp=1.0)
+opt = Options(optimal_checkpointing=false, isic=false, subsampling_factor=2, dt_comp=1.0,
+              save_data_to_disk=true, file_path=segy_path, file_name=segy_name)
+# opt = Options(optimal_checkpointing=false, isic=false, subsampling_factor=2, dt_comp=1.0)
 
 # Setup operators
-Pr = judiProjection(info, recGeometry)
-F = judiModeling(info, model; options=opt)
-F0 = judiModeling(info, model0; options=opt)
-Ps = judiProjection(info, srcGeometry)
+Pr = judiProjection(recGeometry)
+F = judiModeling(model; options=opt)
+F0 = judiModeling(model0; options=opt)
+Ps = judiProjection(srcGeometry)
 J = judiJacobian(Pr*F0*adjoint(Ps), q)
 
 # Nonlinear modeling
@@ -204,11 +219,16 @@ end
 # Ether map SEGY (only ieee32 supported) or read (any 4-byte format) it
 
 # seis = h5map_segy(segy_files)
-seis = h5read_segy(segy_files)
+seisCnt, seis = h5read_segy(segy_files)
 if isnothing(seis)
   @error "Unable to create seis"
   return
 end
+
+setGlobals(
+  seis_out_cnt=seisCnt,
+  seis_out=seis
+  )
 
 # To retrieve sorted data we need to prepare sorting from primary keys (PKey)
 # 'h5geo' uses trace header names that differs from the ones that uses SegyIO
@@ -218,11 +238,25 @@ end
 
 # create H5SeisCon and judiVector from it
 con = H5SeisCon(seis=seis, pkey="SRCX")
-h5dobs = judiVector(con, xkey="GRPX", ykey="GRPY", zkey="RGE")
+
+recGeometry = H5GeometryOOC(container=con, key="receiver", 
+                            xkey="GRPX", ykey="GRPY", zkey="RGE", do_coord_transform=false)
+srcGeometry = H5GeometryOOC(container=con, key="source", 
+                            xkey="SRCX", ykey="SRCY", zkey="SES", do_coord_transform=false)
+
+h5dobs = judiVector(recGeometry, con)
 
 # as long as SEGY stores coordinates in Int32 and h5geo stores it in Float64
 # we need to set previously calculated 'recGeometry' to prevent round off mismatch error (needed only for this example)
-h5dobs.geometry = recGeometry
+# h5dobs.geometry = recGeometry
+# h5dobs = judiVector(recGeometry, con)
+
+# Redefine operators with new geometries
+Pr = judiProjection(recGeometry)
+F = judiModeling(model; options=opt)
+F0 = judiModeling(model0; options=opt)
+Ps = judiProjection(srcGeometry)
+J = judiJacobian(Pr*F0*adjoint(Ps), q)
 
 ##################################################################################################
 
@@ -237,7 +271,7 @@ dD = J*dm
 # Adjoint jacobian
 rtm = adjoint(J)*dD
 
-# evaluate FWI objective function with h5dobs
+# # evaluate FWI objective function with h5dobs
 f, g = fwi_objective(model0, q, h5dobs; options=opt)
 
 imshow(g'); title("FWI (g')")
