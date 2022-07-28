@@ -18,6 +18,9 @@ function get_computational_nt(srcGeometry::H5GeometryOOC, recGeometry::H5Geometr
 end
 
 function write_shot_record(srcGeometry::GeometryIC, srcData, recGeometry::GeometryIC, recData, options)
+  nTrc = length(recGeometry.xloc[1])
+  nTrc < 1 && return
+  
   if save_as == SEGY
     q = judiVector(srcGeometry, srcData)
     d = judiVector(recGeometry, recData)
@@ -32,7 +35,6 @@ function write_shot_record(srcGeometry::GeometryIC, srcData, recGeometry::Geomet
     return container
   elseif save_as == SaveAs::H5SEIS
     from_trace = 0
-    nTrc = length(recGeometry.xloc[1])
     src_x = repeat(srcGeometry.xloc[1], nTrc)
     src_y = repeat(srcGeometry.yloc[1], nTrc)
     src_z = repeat(srcGeometry.zloc[1], nTrc)

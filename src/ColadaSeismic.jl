@@ -77,9 +77,4 @@ function setGlobals(;
 end
 
 
-# ONLY WHEN COLADA IS NOT AVAILABLE
-# h5geo = pyimport("h5geopy._h5geo")
-# h5geo.sr.setSpatialReferenceFromUserInput("EPSG:32056")
-
-
 end # module

@@ -42,7 +42,6 @@ function H5Modeling(;
   spatial_reference::String
   )
 
-  # pylogging = pyimport("logging")
   global h5geo = pyimport("h5geopy._h5geo")
   h5geo.sr.setSpatialReferenceFromUserInput(spatial_reference)
   h5geo.sr.setLengthUnits("m")
@@ -75,10 +74,6 @@ function H5Modeling(;
     @error "Unable to read PhysicalParameter: VELOCITY\n"
     return
   end
-
-  global survey_type = length(phpvel.n) == 2 ? h5geo.SurveyType.TWO_D : h5geo.SurveyType.THREE_D
-  global model_origin_x = phpvel.o[1]
-  global model_origin_y = length(phpvel.o == 2) ? 0.0 : phpvel.o[2]
 
   # declare PHP vars to be able use thm as arguments (or unknown var error will appear)
   phpdensity = nothing
@@ -157,11 +152,9 @@ function H5Modeling(;
     return
   end
 
-  model_origin_x = model.o[1]
-  model_origin_y = 0
-  if length(model.o) == 3
-    model_origin_y = model.o[2]
-  end
+  global model_origin_x = model.o[1]
+  global model_origin_y = length(model.o == 2) ? 0.0 : model.o[2]
+  global survey_type = length(model.n) == 2 ? h5geo.SurveyType.TWO_D : h5geo.SurveyType.THREE_D
 
   con = H5SeisCon(seis=h5geom, pkey=geom_src_pkey)
   recGeometry = H5GeometryOOC(
@@ -227,6 +220,8 @@ function H5Modeling(;
 
   # print modeling info
   @info "computation_type: $computation_type\n"
+  @info "spatial_reference: $spatial_reference\n"
+  @info "save_as: $save_as\n"
   @info "ntComp: $ntComp\n"
   @info "dtComp: $dtComp\n"
   @info "model settings:\n"
@@ -237,6 +232,7 @@ function H5Modeling(;
   @info "model_ykey: $model_ykey\n"
   @info "model_origin_x: $model_origin_x\n"
   @info "model_origin_y: $model_origin_y\n"
+  @info "survey_type: $survey_type\n"
   @info "model_orientation: $model_orientation\n"
   @info "geometry settings:\n"
   @info "geom_src_xkey: $geom_src_xkey\n"
