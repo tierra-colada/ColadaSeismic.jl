@@ -27,6 +27,9 @@ function H5Modeling(;
 
   # common settings
   computation_type::String,
+  save_as::SaveAs,
+  spatial_reference::String
+  
   # LSRTM
   lsrtm_niter::Int=nothing,
   lsrtm_batchsize::Int=nothing,
@@ -37,9 +40,6 @@ function H5Modeling(;
   fwi_vmax::Number,
   # TWRI
   twri_opt::TWRIOptions=nothing,
-
-  save_as::SaveAs,
-  spatial_reference::String
   )
 
   global h5geo = pyimport("h5geopy._h5geo")
