@@ -1,3 +1,5 @@
+
+export rotate_Nx2_array, rotate_2xN_array, rotate_arrays, h5geo2judiTraceHeaderName, judi2h5geoTraceHeaderName
 @enum H5PhPType begin
   VELOCITY = 1
   DENSITY = 2

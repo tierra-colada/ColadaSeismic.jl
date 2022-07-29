@@ -222,9 +222,6 @@ function H5WritePhysicalParameter(;
     return
   end
 
-  authName = colada.Util().CRSAuthName()
-  authCode = string(colada.Util().CRSCode())
-
   p = h5geo.SeisParam()
   p.spatialReference = spatial_reference
   p.lengthUnits = "m"

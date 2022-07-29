@@ -1,6 +1,7 @@
 import JUDI.Geometry
 
-# Load geometry from out-of-core Geometry container
+# Ovewritten to be able to rotate coordinates
+# Load geometry from out-of-core Geometry container and apply rotation
 function Geometry(geometry::GeometryOOC)
   nsrc = length(geometry.container)
 

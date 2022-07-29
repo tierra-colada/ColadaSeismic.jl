@@ -1,3 +1,5 @@
+export H5Modeling
+
 # operation_type: Forward Modeling, RTM, FWI, TWRI
 function H5Modeling(;
   # models
@@ -13,7 +15,7 @@ function H5Modeling(;
   model_ykey::String="CDP_Y",
 
   # geometry
-  h5geom=nothing,
+  geom_con=nothing,
   geom_src_pkey::String="SP",
   geom_src_xkey::String="SRCX",
   geom_src_ykey::String="SRCY",
@@ -27,8 +29,11 @@ function H5Modeling(;
 
   # common settings
   computation_type::String,
+  nt::Real,
+  dt::Number,
   save_as::SaveAs,
-  spatial_reference::String
+  do_coord_transform::Bool,
+  spatial_reference::String,
   
   # LSRTM
   lsrtm_niter::Int=nothing,
@@ -147,8 +152,8 @@ function H5Modeling(;
           nb=model_nb)
 
   # Geometry
-  if isnothing(h5geom)
-    @error "Geometry H5Seis is NULL\n"
+  if isnothing(geom_con)
+    @error "Geometry container is NULL\n"
     return
   end
 
@@ -156,36 +161,40 @@ function H5Modeling(;
   global model_origin_y = length(model.o == 2) ? 0.0 : model.o[2]
   global survey_type = length(model.n) == 2 ? h5geo.SurveyType.TWO_D : h5geo.SurveyType.THREE_D
 
-  con = H5SeisCon(seis=h5geom, pkey=geom_src_pkey)
-  recGeometry = H5GeometryOOC(
-    container=con, 
-    key="receiver", 
-    xkey=geom_rec_xkey, 
-    ykey=geom_rec_ykey, 
-    zkey=geom_rec_zkey, 
-    do_coord_transform=true)
-  srcGeometry = H5GeometryOOC(
-    container=con, 
-    key="source", 
-    xkey=geom_src_xkey, 
-    ykey=geom_src_ykey, 
-    zkey=geom_src_zkey, 
-    do_coord_transform=true,)
+  if geom_con isa SeisCon
+    segy_depth_key_rec = h5geo2judiTraceHeaderName(geom_rec_zkey)
+    if isnothing(segy_depth_key_rec)
+      @error "Invalid geometry receiver ZKEY"
+      return
+    end
+    segy_depth_key_src = h5geo2judiTraceHeaderName(geom_src_zkey)
+    if isnothing(segy_depth_key_src)
+      @error "Invalid geometry source ZKEY"
+      return
+    end
+    recGeometry = Geometry(geom_con; key="receiver", segy_depth_key=segy_depth_key_rec)
+    srcGeometry = Geometry(geom_con; key="source", segy_depth_key=segy_depth_key_src)
+  elseif geom_con isa H5SeisCon
+    recGeometry = H5GeometryOOC(
+      container=geom_con, 
+      key="receiver", 
+      xkey=geom_rec_xkey, 
+      ykey=geom_rec_ykey, 
+      zkey=geom_rec_zkey, 
+      do_coord_transform=do_coord_transform)
+    srcGeometry = H5GeometryOOC(
+      container=geom_con, 
+      key="source", 
+      xkey=geom_src_xkey, 
+      ykey=geom_src_ykey, 
+      zkey=geom_src_zkey, 
+      do_coord_transform=do_coord_transform)
+  else
+    @error "Geometry container is neither SeisCon nor H5SeisCon\n"
+    return
+  end
 
-  # recGeometry = Geometry(
-  #   container=con, 
-  #   xkey=geom_rec_xkey, 
-  #   ykey=geom_rec_ykey, 
-  #   zkey=geom_rec_zkey, 
-  #   do_coord_transform=true)
-  # srcGeometry = Geometry(
-  #   container=con, 
-  #   xkey=geom_src_xkey, 
-  #   ykey=geom_src_ykey, 
-  #   zkey=geom_src_zkey, 
-  #   do_coord_transform=true)
-
-  # create seis_out
+  # prepare seis_out for storing traces
   if save_as == SaveAs::H5SEIS
     global seis_out_cnt = h5geo.createSeisContainerByName(
       joinpath(opt.file_path, opt.file_name), 
@@ -196,15 +205,12 @@ function H5Modeling(;
     end
   end
 
-
   if isnothing(srcGeometry) || isnothing(srcGeometry)
     @error "Unable to prepare Source and Receiver JUDI Geometry objects from H5Seis\n"
     return
   end
 
   # setup wavelet
-  dt = Float32(abs(h5geom.getSampRate("ms")))
-  nt = Integer(h5geom.getNSamp())
   t = Float32((nt-1)*dt)
   wavelet = ricker_wavelet(t, dt, opt.f0)
   q = judiVector(srcGeometry, wavelet)
@@ -222,7 +228,9 @@ function H5Modeling(;
   @info "computation_type: $computation_type\n"
   @info "spatial_reference: $spatial_reference\n"
   @info "save_as: $save_as\n"
+  @info "nt: $nt"
   @info "ntComp: $ntComp\n"
+  @info "dt: $dt"
   @info "dtComp: $dtComp\n"
   @info "model settings:\n"
   @info "model.o: $(model.o)\n"
